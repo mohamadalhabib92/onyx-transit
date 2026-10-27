@@ -43,7 +43,7 @@ Vérifications :
 ```bash
 npm run typecheck       # tsc --noEmit
 npm run build:web       # expo export -p web + post-traitement PWA → dist/
-npx serve dist          # puis ouvrir http://localhost:3000/onyx-transit/ (voir ci-dessous)
+npm run serve:web       # puis ouvrir http://localhost:8080/onyx-transit/
 ```
 
 ## Build web / PWA
@@ -55,7 +55,7 @@ npx serve dist          # puis ouvrir http://localhost:3000/onyx-transit/ (voir 
 
 L’app est servie sous le chemin **`/onyx-transit`** (`experiments.baseUrl` dans `app.json`), prévu pour GitHub Pages
 `https://<utilisateur>.github.io/onyx-transit/`. Si le dépôt porte un autre nom, modifiez `baseUrl` en conséquence.
-Pour tester localement : copiez `dist/` dans un dossier `onyx-transit/` et servez le dossier parent.
+Pour tester localement : `npm run serve:web` sert `dist/` sous ce chemin (http://localhost:8080/onyx-transit/).
 
 ## Déploiement GitHub Pages
 

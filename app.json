@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ch.mohamadba.onyxtransit",
+      "bundleIdentifier": "com.vibecode.onyxtransit-mvty5t",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Onyx Transit utilise votre position pour pré-remplir le lieu de prise en charge. Elle reste sur votre appareil.",
         "ITSAppUsesNonExemptEncryption": false,

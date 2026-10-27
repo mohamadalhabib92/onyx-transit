@@ -6,7 +6,7 @@
 |---|---|
 | Nom (≤ 30) | Onyx Transit – Chauffeur privé (30 car.) |
 | Sous-titre (≤ 30) | Chauffeur privé à Genève (24 car.) |
-| Bundle ID | `ch.mohamadba.onyxtransit` |
+| Bundle ID | `com.vibecode.onyxtransit-mvty5t` |
 | SKU proposé | `onyx-transit-ios-001` |
 | Projet EAS | `bbb2faed-fd86-4567-b84c-26c32bfea811` (compte habib548) |
 | Version / build | 1.0.0 / numéro de build géré par EAS (remote, autoIncrement) |

@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Onyx Transit",
+    "slug": "onyx-transit",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "onyxtransit",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0B0D",
+    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#0B0B0D" },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.onyxtransit",
+      "infoPlist": { "NSLocationWhenInUseUsageDescription": "Onyx Transit utilise votre position pour pré-remplir le lieu de prise en charge." }
+    },
+    "android": {
+      "package": "com.yourcompany.onyxtransit",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0B0D",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "web": { "favicon": "./assets/favicon.png", "output": "single", "bundler": "metro", "name": "Onyx Transit", "shortName": "Onyx", "themeColor": "#0B0B0D", "backgroundColor": "#0B0B0D", "lang": "fr" },
+    "plugins": ["expo-router", ["expo-location", { "locationWhenInUsePermission": "Onyx Transit utilise votre position pour pré-remplir le lieu de prise en charge." }]],
+    "experiments": { "typedRoutes": false, "baseUrl": "/onyx-transit" }
+  }
+}

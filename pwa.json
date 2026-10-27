@@ -1,0 +1,10 @@
+{
+  "name": "Onyx Transit — Chauffeur privé premium",
+  "short_name": "Onyx",
+  "description": "Réservez un chauffeur privé premium à Genève : estimation, suivi, reçu. Fonctionne hors ligne (démo locale).",
+  "lang": "fr",
+  "theme_color": "#0B0B0D",
+  "background_color": "#0B0B0D",
+  "dark": true,
+  "categories": ["travel", "navigation"]
+}

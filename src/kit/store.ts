@@ -32,6 +32,11 @@ export type PersistedStore<T> = {
   key: string;
 };
 
+/** Objet JSON : ni null, ni tableau, ni nombre, ni chaîne. */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function corruptStamp(date: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
@@ -74,7 +79,7 @@ export function createPersistedStore<T extends object>(
   let pendingReset = false;
   /** Un set a eu lieu avant la fin de la lecture (réservation saisie pendant le chargement). */
   let mutated = false;
-  let corruption: { backupKey: string } | null = null;
+  let corruption: { backupKey: string; raw: string } | null = null;
   let ticket = 0;
   const storageKey = `${key}@v${version}`;
 
@@ -134,11 +139,16 @@ export function createPersistedStore<T extends object>(
       };
 
       if (raw) {
+        let loaded: T | undefined;
+        let unreadable = false;
         try {
-          const parsed = JSON.parse(raw) as Partial<T>;
-          const loaded = revive ? revive(parsed) : { ...initial(), ...parsed };
-          if (!pendingReset) applyLoaded(loaded);
+          const parsed: unknown = JSON.parse(raw);
+          if (!isJsonObject(parsed)) unreadable = true;
+          else loaded = revive ? revive(parsed as Partial<T>) : { ...initial(), ...(parsed as Partial<T>) };
         } catch {
+          unreadable = true;
+        }
+        if (unreadable || loaded === undefined) {
           const preserved = await preserveCorruptRaw(storage, storageKey, raw);
           if (my !== ticket) return { status: 'ignored' };
           if (!preserved.ok) return { status: 'corrupt-copy-failed' };
@@ -152,10 +162,11 @@ export function createPersistedStore<T extends object>(
             corruption = null;
             return { status: 'ready' };
           }
-          corruption = { backupKey: preserved.backupKey };
+          corruption = { backupKey: preserved.backupKey, raw };
           emit();
           return { status: 'corrupt', backupKey: preserved.backupKey };
         }
+        if (!pendingReset) applyLoaded(loaded);
       }
       if (my !== ticket) return { status: 'ignored' };
       if (pendingReset) {
@@ -177,6 +188,15 @@ export function createPersistedStore<T extends object>(
     },
     startFresh: async () => {
       if (!corruption) return;
+      let copied: string | null;
+      try {
+        copied = await storage.getItem(corruption.backupKey);
+      } catch {
+        throw new Error('La copie de sauvegarde n’a pas pu être relue. Le remplacement est refusé et l’original n’a pas été modifié.');
+      }
+      if (copied !== corruption.raw) {
+        throw new Error('La copie de sauvegarde est absente ou ne correspond plus au contenu brut. Le remplacement est refusé et l’original n’a pas été modifié.');
+      }
       const next = initial();
       await storage.setItem(storageKey, JSON.stringify(next));
       const previous = state;

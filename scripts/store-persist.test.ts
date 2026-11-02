@@ -10,7 +10,7 @@ function memory() {
   const keys: string[] = [];
   let writes = 0;
   let removes = 0;
-  let pending: ((value: string | null) => void) | null = null;
+  let pending: (() => void) | null = null;
   const storage: KeyValueStorage = {
     getItem: (key) =>
       new Promise((resolve, reject) => {
@@ -21,7 +21,7 @@ function memory() {
         }
         if (flags.deferRead) {
           flags.deferRead = false;
-          pending = () => resolve(data.has(key) ? data.get(key)! : null);
+          pending = () => resolve(data.has(key) ? (data.get(key) ?? null) : null);
           return;
         }
         resolve(data.has(key) ? data.get(key)! : null);
@@ -128,6 +128,44 @@ test('un JSON illisible est copié sans écraser l’original, puis le départ �
   store.set({ name: 'Ada' });
   await wait(200);
   assert.deepEqual(JSON.parse(mem.data.get('box@v1')!), { name: 'Ada' });
+});
+
+test('null, 42 et [1] sont illisibles : copie sans écraser l’original', async () => {
+  for (const raw of ['null', '42', '[1]']) {
+    const mem = memory();
+    mem.data.set('box@v1', raw);
+    const store = createPersistedStore('box', () => ({ name: '' }), 1, undefined, mem.storage);
+    const result = await store.hydrate();
+    assert.equal(result.status, 'corrupt', raw);
+    if (result.status !== 'corrupt') continue;
+    assert.equal(mem.data.get('box@v1'), raw);
+    assert.equal(mem.data.get(result.backupKey), raw);
+    assert.deepEqual(
+      mem.keys.filter((k) => k === 'box@v1'),
+      [],
+    );
+    store.set({ name: 'écrasé' });
+    await wait(200);
+    assert.equal(mem.data.get('box@v1'), raw);
+    assert.equal(mem.data.get('box@v1')!.includes('"0"'), false);
+  }
+});
+
+test('startFresh refuse si la copie a été supprimée', async () => {
+  const mem = memory();
+  const raw = '{cassé';
+  mem.data.set('box@v1', raw);
+  const store = createPersistedStore('box', () => ({ name: '' }), 1, undefined, mem.storage);
+  const result = await store.hydrate();
+  assert.equal(result.status, 'corrupt');
+  if (result.status !== 'corrupt') return;
+  mem.data.delete(result.backupKey);
+  await assert.rejects(store.startFresh(), /copie de sauvegarde/);
+  assert.equal(mem.data.get('box@v1'), raw);
+  store.set({ name: 'écrasé' });
+  await wait(200);
+  assert.equal(mem.data.get('box@v1'), raw);
+  assert.equal(mem.keys.includes('box@v1'), false);
 });
 
 test('si la copie échoue, l’original illisible n’est pas remplacé', async () => {

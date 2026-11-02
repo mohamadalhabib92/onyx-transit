@@ -639,8 +639,8 @@ export function BootGate({
       setBackupKey(null);
       setConfirmFresh(false);
       setState('ready');
-    } catch {
-      setRecoverError('Le remplacement n’a pas abouti. L’original n’a pas été modifié si la copie était déjà en place.');
+    } catch (err) {
+      setRecoverError(err instanceof Error && err.message ? err.message : 'Le remplacement n’a pas abouti. L’original n’a pas été modifié.');
     }
   };
 

@@ -24,7 +24,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
+      - run: npm run typecheck
       - run: npm run check
       - run: npm test
       - name: Export web + PWA (baseUrl /onyx-transit)

@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ErrorBoundary } from '@/kit/error-boundary';
 import { ThemeProvider } from '@/kit/theme';
 import { BootGate, ToastProvider } from '@/kit/ui';
 import { onyx } from '@/theme';
@@ -18,13 +19,15 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider value={onyx}>
-        <ToastProvider>
-          <StatusBar style="light" />
-          <BootGate hydrate={hydrate} appName="Onyx Transit">
-            <Simulator />
-            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: onyx.bg } }} />
-          </BootGate>
-        </ToastProvider>
+        <ErrorBoundary>
+          <ToastProvider>
+            <StatusBar style="light" />
+            <BootGate hydrate={hydrate} appName="Onyx Transit">
+              <Simulator />
+              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: onyx.bg } }} />
+            </BootGate>
+          </ToastProvider>
+        </ErrorBoundary>
       </ThemeProvider>
     </SafeAreaProvider>
   );

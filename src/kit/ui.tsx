@@ -18,6 +18,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePrefersReducedMotion } from './a11y';
 import { useOnline } from './net';
 import { alpha, useTheme } from './theme';
 
@@ -47,6 +48,7 @@ export function T({
   children,
   numberOfLines,
   selectable,
+  tabular,
 }: {
   v?: TVariant;
   color?: string;
@@ -56,6 +58,8 @@ export function T({
   children: React.ReactNode;
   numberOfLines?: number;
   selectable?: boolean;
+  /** Chiffres tabulaires (prix, heures). */
+  tabular?: boolean;
 }) {
   const t = useTheme();
   const s = sizes[v];
@@ -73,6 +77,7 @@ export function T({
           letterSpacing: v === 'caption' || v === 'label' ? 0.4 : undefined,
           textTransform: v === 'caption' ? 'uppercase' : undefined,
           fontFamily: v === 'mono' ? Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace, Menlo, monospace' }) : undefined,
+          fontVariant: tabular ? ['tabular-nums'] : undefined,
         },
         style,
       ]}
@@ -206,7 +211,7 @@ export function Button({
 }) {
   const t = useTheme();
   const bg = { primary: t.primary, secondary: t.surface2, ghost: 'transparent', danger: t.danger, success: t.success }[kind];
-  const fg = { primary: t.primaryText, secondary: t.text, ghost: t.primary, danger: '#fff', success: '#fff' }[kind];
+  const fg = { primary: t.primaryText, secondary: t.text, ghost: t.primary, danger: t.primaryText, success: t.primaryText }[kind];
   return (
     <Pressable
       accessibilityRole="button"
@@ -365,7 +370,7 @@ export function ToggleRow({ label, sub, value, onChange, disabled }: { label: st
           </T>
         ) : null}
       </View>
-      <Switch accessibilityLabel={label} value={value} onValueChange={onChange} disabled={disabled} trackColor={{ true: t.primary, false: t.surface2 }} thumbColor="#fff" />
+      <Switch accessibilityLabel={label} value={value} onValueChange={onChange} disabled={disabled} trackColor={{ true: t.primary, false: t.textMuted }} thumbColor={t.primaryText} />
     </Row>
   );
 }
@@ -418,7 +423,7 @@ export function Banner({ kind = 'info', title, text, icon, action }: { kind?: 'i
   );
 }
 
-export function DemoBadge({ label = 'Démo / Échantillon' }: { label?: string }) {
+export function DemoBadge({ label = 'Simulation' }: { label?: string }) {
   const t = useTheme();
   return <Badge label={label} color={t.accent} icon="flask" />;
 }
@@ -429,8 +434,8 @@ export function OfflineBadge({ text = 'Hors ligne — données en cache' }: { te
   if (online) return null;
   return (
     <View accessibilityRole="alert" style={{ backgroundColor: t.warning, paddingVertical: 6, paddingHorizontal: 12, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
-      <Ionicons name="cloud-offline" size={14} color="#111" />
-      <Text style={{ color: '#111', fontWeight: '700', fontSize: 12 }}>{text}</Text>
+      <Ionicons name="cloud-offline" size={14} color={t.primaryText} />
+      <Text style={{ color: t.primaryText, fontWeight: '700', fontSize: 12 }}>{text}</Text>
     </View>
   );
 }
@@ -457,8 +462,10 @@ export function EmptyState({ icon = 'sparkles', title, text, action }: { icon?: 
 
 export function Skeleton({ height = 16, width = '100%', style }: { height?: number; width?: number | `${number}%`; style?: StyleProp<ViewStyle> }) {
   const t = useTheme();
-  const op = useRef(new Animated.Value(0.4)).current;
+  const reduce = usePrefersReducedMotion();
+  const op = useRef(new Animated.Value(reduce ? 0.7 : 0.4)).current;
   useEffect(() => {
+    if (reduce) return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(op, { toValue: 1, duration: 650, useNativeDriver: Platform.OS !== 'web' }),
@@ -467,7 +474,7 @@ export function Skeleton({ height = 16, width = '100%', style }: { height?: numb
     );
     loop.start();
     return () => loop.stop();
-  }, [op]);
+  }, [op, reduce]);
   return <Animated.View style={[{ height, width, borderRadius: 8, backgroundColor: t.surface2, opacity: op }, style]} />;
 }
 
@@ -508,7 +515,7 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} />
+      <Pressable accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: t.overlay }} />
       <View style={{ backgroundColor: t.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingBottom: insets.bottom + 12 }}>
         <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center' }}>
           <Row style={{ padding: 16, paddingBottom: 6, justifyContent: 'space-between' }}>
@@ -552,14 +559,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               paddingVertical: 10,
               paddingHorizontal: 14,
               borderRadius: 12,
-              backgroundColor: x.kind === 'error' ? t.danger : x.kind === 'success' ? t.success : t.dark ? '#f2f2f2' : '#1d1d1f',
+              backgroundColor: x.kind === 'error' ? t.danger : x.kind === 'success' ? t.success : t.text,
               flexDirection: 'row',
               gap: 8,
               alignItems: 'center',
             }}
           >
-            <Ionicons name={x.kind === 'error' ? 'alert-circle' : x.kind === 'success' ? 'checkmark-circle' : 'information-circle'} size={18} color={x.kind === 'info' && t.dark ? '#111' : '#fff'} />
-            <Text style={{ color: x.kind === 'info' && t.dark ? '#111' : '#fff', fontWeight: '600' }}>{x.text}</Text>
+            <Ionicons name={x.kind === 'error' ? 'alert-circle' : x.kind === 'success' ? 'checkmark-circle' : 'information-circle'} size={18} color={t.primaryText} />
+            <Text style={{ color: t.primaryText, fontWeight: '600' }}>{x.text}</Text>
           </View>
         ))}
       </View>
@@ -607,7 +614,7 @@ export function BootGate({ hydrate, children, appName, timeoutMs = 4000 }: { hyd
     );
   return (
     <View style={{ flex: 1, backgroundColor: t.bg, padding: 24, gap: 14, justifyContent: 'center', maxWidth: 520, width: '100%', alignSelf: 'center' }}>
-      <Banner kind="warning" title="Chargement plus long que prévu" text="Le stockage local ne répond pas. Vous pouvez réessayer ou continuer avec les données locales par défaut (hors ligne)." />
+      <Banner kind="warning" title="Chargement plus long que prévu" text="La lecture du stockage n’a pas abouti. Réessayer la relance. Continuer n’écrit rien : les données déjà enregistrées ne sont pas remplacées par un état vide." />
       <Button title="Réessayer" icon="refresh" onPress={run} />
       <Button title="Continuer hors ligne" kind="secondary" onPress={() => setState('ready')} />
     </View>

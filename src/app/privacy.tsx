@@ -25,7 +25,7 @@ export default function Privacy() {
         <IconButton icon="chevron-back" a11y="Retour" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
         <T v="h2">Confidentialité</T>
       </Row>
-      <Banner kind="info" text="Conforme aux principes RGPD (UE) et nLPD (Suisse) : minimisation, finalités explicites, droits d’accès, de portabilité et d’effacement. Responsable du traitement : à compléter (YOUR_COMPANY_LEGAL_NAME)." />
+      <Banner kind="info" text="nLPD (Suisse) d’abord ; RGPD en plus pour les clients de l’UE. Minimisation, finalités, accès, portabilité et effacement. Responsable : YOUR_COMPANY_LEGAL_NAME. Texte à valider." />
       {s.signedIn ? (
         <Section title="Mes consentements">
           <Card>

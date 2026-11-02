@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Polygon, Rect, Stop as SvgStop, Text as SvgText } from 'react-native-svg';
+import { usePrefersReducedMotion } from '@/kit/a11y';
 import { alpha, useTheme } from '@/kit/theme';
 import { T } from '@/kit/ui';
 import type { LatLon } from '@/lib/pricing';
@@ -30,14 +31,19 @@ export function RouteMap({
   dropoff,
   car,
   label,
+  pickupName,
+  dropoffName,
 }: {
   pickup?: LatLon | null;
   dropoff?: LatLon | null;
   /** position de la voiture : { leg: 'approach' | 'trip', t: 0..1 } */
   car?: { leg: 'approach' | 'trip'; t: number } | null;
   label?: string;
+  pickupName?: string;
+  dropoffName?: string;
 }) {
   const th = useTheme();
+  const reduceMotion = usePrefersReducedMotion();
   const pts = [pickup, dropoff].filter(Boolean) as LatLon[];
   // Cadre : Genève par défaut, sinon englobe les points avec marge
   let minLat = 46.165, maxLat = 46.29, minLon = 6.03, maxLon = 6.22;
@@ -67,16 +73,21 @@ export function RouteMap({
     if (car.leg === 'trip' && B && ctrl) carPos = bezier(A, ctrl, B, car.t);
   }
 
-  // Halo pulsé autour du point de départ — transformOrigin en camelCase (correctif web)
+  // Halo pulsé — transformOrigin en camelCase (propriété DOM valide ; pas de transform-origin).
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    if (reduceMotion) return;
     const loop = Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 1600, easing: Easing.out(Easing.quad), useNativeDriver: false }));
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [pulse, reduceMotion]);
+
+  const from = pickupName || (pickup ? 'indiqué' : 'non choisi');
+  const to = dropoffName || (dropoff ? 'indiquée' : 'non choisie');
+  const routeSummary = `Carte schématique. Départ : ${from}. Destination : ${to}.${label ? ' ' + label : ''}`;
 
   return (
-    <View style={{ borderRadius: th.radius, overflow: 'hidden', backgroundColor: '#0F1116', borderWidth: 1, borderColor: th.border }}>
+    <View accessibilityLabel={routeSummary} style={{ borderRadius: th.radius, overflow: 'hidden', backgroundColor: th.bg, borderWidth: 1, borderColor: th.border }}>
       <View style={{ width: '100%', aspectRatio: W / H }}>
         <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}>
           <Defs>
@@ -85,18 +96,18 @@ export function RouteMap({
               <SvgStop offset="1" stopColor={th.primary} />
             </LinearGradient>
           </Defs>
-          <Rect x={0} y={0} width={W} height={H} fill="#0F1116" />
+          <Rect x={0} y={0} width={W} height={H} fill={th.bg} />
           <G opacity={0.35}>
             {Array.from({ length: 13 }).map((_, i) => (
-              <Line key={'v' + i} x1={i * 30} y1={0} x2={i * 30} y2={H} stroke="#262A33" strokeWidth={1} />
+              <Line key={'v' + i} x1={i * 30} y1={0} x2={i * 30} y2={H} stroke={th.border} strokeWidth={1} />
             ))}
             {Array.from({ length: 8 }).map((_, i) => (
-              <Line key={'h' + i} x1={0} y1={i * 30} x2={W} y2={i * 30} stroke="#262A33" strokeWidth={1} />
+              <Line key={'h' + i} x1={0} y1={i * 30} x2={W} y2={i * 30} stroke={th.border} strokeWidth={1} />
             ))}
           </G>
-          <Polygon points={poly(LAKE)} fill="#14263A" stroke="#1F3A57" strokeWidth={1} />
-          <Path d={path(RHONE)} stroke="#1F3A57" strokeWidth={4} fill="none" strokeLinecap="round" />
-          <Path d={path(ARVE)} stroke="#1A3048" strokeWidth={2.5} fill="none" strokeLinecap="round" />
+          <Polygon points={poly(LAKE)} fill={th.mapWater} stroke={th.mapWaterStroke} strokeWidth={1} />
+          <Path d={path(RHONE)} stroke={th.mapWaterStroke} strokeWidth={4} fill="none" strokeLinecap="round" />
+          <Path d={path(ARVE)} stroke={th.mapRiver} strokeWidth={2.5} fill="none" strokeLinecap="round" />
           {A && B && ctrl ? (
             <>
               <Path d={`M${A.x} ${A.y} Q${ctrl.x} ${ctrl.y} ${B.x} ${B.y}`} stroke={alpha(th.primary, 0.25)} strokeWidth={9} fill="none" strokeLinecap="round" />
@@ -109,25 +120,25 @@ export function RouteMap({
           {A ? (
             <G>
               <Circle cx={A.x} cy={A.y} r={9} fill={alpha(th.success, 0.25)} />
-              <Circle cx={A.x} cy={A.y} r={5} fill={th.success} stroke="#fff" strokeWidth={1.5} />
+              <Circle cx={A.x} cy={A.y} r={5} fill={th.success} stroke={th.text} strokeWidth={1.5} />
             </G>
           ) : null}
           {B ? (
             <G>
-              <Rect x={B.x - 6} y={B.y - 6} width={12} height={12} rx={2} fill={th.primary} stroke="#fff" strokeWidth={1.5} />
+              <Rect x={B.x - 6} y={B.y - 6} width={12} height={12} rx={2} fill={th.primary} stroke={th.text} strokeWidth={1.5} />
             </G>
           ) : null}
           {carPos ? (
             <G>
               <Circle cx={carPos.x} cy={carPos.y} r={11} fill={alpha(th.accent, 0.25)} />
-              <Circle cx={carPos.x} cy={carPos.y} r={6.5} fill={th.accent} stroke="#0B0B0D" strokeWidth={2} />
+              <Circle cx={carPos.x} cy={carPos.y} r={6.5} fill={th.accent} stroke={th.primaryText} strokeWidth={2} />
             </G>
           ) : null}
-          <SvgText x={8} y={H - 8} fill="#5C6270" fontSize={9}>
+          <SvgText x={8} y={H - 8} fill={th.mapLabel} fontSize={9}>
             Carte schématique — Genève (tracés simplifiés)
           </SvgText>
         </Svg>
-        {A ? (
+        {A && !reduceMotion ? (
           <Animated.View
             pointerEvents="none"
             style={{
@@ -148,13 +159,16 @@ export function RouteMap({
           />
         ) : null}
       </View>
-      {label ? (
-        <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: th.border }}>
+      <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: th.border, gap: 2 }}>
+        <T v="small" muted>
+          Liste équivalente : départ {from}, destination {to}.
+        </T>
+        {label ? (
           <T v="small" muted>
             {label}
           </T>
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </View>
   );
 }

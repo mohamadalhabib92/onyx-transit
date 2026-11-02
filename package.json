@@ -32,6 +32,8 @@
     "web": "expo start --web",
     "build:web": "expo export -p web && node scripts/pwa.mjs",
     "typecheck": "tsc --noEmit",
+    "check": "node --experimental-strip-types scripts/check-passe1.ts",
+    "test": "node --experimental-strip-types --test scripts/store-persist.test.ts",
     "serve:web": "node scripts/serve.mjs"
   },
   "private": true

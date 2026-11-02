@@ -1,6 +1,8 @@
 import { createPersistedStore, uid } from '@/kit/store';
-import type { CategoryId, LatLon } from '@/lib/pricing';
+import { CATEGORIES, type CategoryId, type LatLon } from '@/lib/pricing';
+import { assessDocs, canAssign, capToMaximum, parseOtrMaxMinutes, type DocDef, type DocIssue } from '@/lib/rules';
 import type { City } from '@/data/places';
+import { ENV } from '@/config';
 
 export type Role = 'client' | 'chauffeur' | 'admin';
 export type RideStatus = 'requested' | 'accepted' | 'arriving' | 'in_progress' | 'completed' | 'cancelled';
@@ -16,6 +18,12 @@ export type Ride = {
   km: number;
   minutes: number;
   price: number;
+  /** Plafond annoncé. Absent sur d’anciennes courses : le prix enregistré fait foi. */
+  priceMaximum?: number;
+  /** Horodatage du prix maximum (preuve). */
+  quotedAt?: number;
+  /** Prix facturé, toujours ≤ prix maximum. */
+  priceCharged?: number;
   currency: string;
   status: RideStatus;
   /** true = la progression est simulée automatiquement (démo étiquetée) */
@@ -28,12 +36,19 @@ export type Ride = {
   rating?: number;
   comment?: string;
   driverName?: string;
+  driverVtcCard?: string;
+  plateLabel?: string;
+  /** Chauffeur désigné par l’admin (dispatch manuel). */
+  assignedDriverId?: string | null;
   events: { at: number; label: string }[];
   dispute?: { reason: string; status: 'open' | 'resolved'; at: number; note?: string };
 };
 
 export type DocStatus = 'missing' | 'uploaded_placeholder' | 'validated_demo';
 export type Consents = { terms: boolean; privacy: boolean; location: boolean; marketing: boolean; at?: number };
+
+export type JournalKind = 'quote' | 'status' | 'assign' | 'price' | 'doc' | 'dispatch_blocked' | 'other';
+export type JournalEntry = { id: string; at: number; rideId?: string; kind: JournalKind; label: string };
 
 export type AppState = {
   signedIn: boolean;
@@ -42,36 +57,120 @@ export type AppState = {
   consents: Consents;
   payment: PaymentKind;
   rides: Ride[];
-  driver: { online: boolean; sessionStart?: number; sessionEarnings: number; docs: Record<string, DocStatus>; refused: string[] };
+  /** Journal append-only. Jamais réécrit entrée par entrée. */
+  journal: JournalEntry[];
+  /** Hypothèse de démo, éditable par l’admin, masquée au client. */
+  driverShareDemo: number;
+  driver: {
+    online: boolean;
+    sessionStart?: number;
+    sessionEarnings: number;
+    docs: Record<string, DocStatus>;
+    docExpiry: Record<string, string | null>;
+    refused: string[];
+    vehicleCategory: CategoryId | null;
+    vehicleSeats: number | null;
+    vtcCardNumber: string;
+    plateLabel: string;
+    drivingMinutes: number;
+  };
   cities: Record<City['id'], boolean>;
   aiDispatch: boolean;
   autoSim: boolean;
 };
 
-export const DRIVER_DOCS = [
-  { id: 'permis', label: 'Permis de conduire (cat. B, ≥ 3 ans)' },
-  { id: 'carte_pro', label: 'Carte professionnelle chauffeur (Genève)' },
-  { id: 'assurance', label: 'Assurance responsabilité transport de personnes' },
-  { id: 'permis_circulation', label: 'Permis de circulation du véhicule' },
-  { id: 'casier', label: 'Extrait du casier judiciaire' },
+export type DocInfo = DocDef & { group: 'driver' | 'vehicle' };
+
+export const DRIVER_DOCS: DocInfo[] = [
+  { id: 'permis', label: 'Permis de conduire B121', group: 'driver', required: true },
+  { id: 'carte_pro', label: 'Carte professionnelle VTC (Genève)', group: 'driver', required: true },
+  { id: 'identite', label: 'Pièce d’identité', group: 'driver', required: true },
+  { id: 'contrat', label: 'Contrat', group: 'driver', required: true },
+  { id: 'casier', label: 'Extrait du casier judiciaire', group: 'driver', required: false },
 ];
 
-export const store = createPersistedStore<AppState>(
-  'onyx-transit',
-  () => ({
+export const VEHICLE_DOCS: DocInfo[] = [
+  { id: 'plaques_vtc', label: 'Plaques VTC', group: 'vehicle', required: true },
+  { id: 'permis_circulation', label: 'Permis de circulation du véhicule', group: 'vehicle', required: true },
+  { id: 'assurance', label: 'Assurance responsabilité transport de personnes', group: 'vehicle', required: true },
+  { id: 'controle_technique', label: 'Contrôle technique', group: 'vehicle', required: true },
+  { id: 'categorie', label: 'Catégorie et capacités du véhicule', group: 'vehicle', required: true },
+];
+
+export const ALL_DOCS: DocInfo[] = [...DRIVER_DOCS, ...VEHICLE_DOCS];
+
+const EMPTY_DOCS = Object.fromEntries(ALL_DOCS.map((d) => [d.id, 'missing'])) as Record<string, DocStatus>;
+const EMPTY_EXPIRY = Object.fromEntries(ALL_DOCS.map((d) => [d.id, null])) as Record<string, string | null>;
+
+function initialState(): AppState {
+  return {
     signedIn: false,
     profile: { name: '', email: '', phone: '', company: '' },
     role: 'client',
     consents: { terms: false, privacy: false, location: false, marketing: false },
     payment: 'simulated',
     rides: [],
-    driver: { online: false, sessionEarnings: 0, docs: Object.fromEntries(DRIVER_DOCS.map((d) => [d.id, 'missing'])) as Record<string, DocStatus>, refused: [] },
+    journal: [],
+    driverShareDemo: 0.8,
+    driver: {
+      online: false,
+      sessionEarnings: 0,
+      docs: { ...EMPTY_DOCS },
+      docExpiry: { ...EMPTY_EXPIRY },
+      refused: [],
+      vehicleCategory: null,
+      vehicleSeats: null,
+      vtcCardNumber: '',
+      plateLabel: '',
+      drivingMinutes: 0,
+    },
     cities: { geneve: true, paris: false, casablanca: false },
     aiDispatch: false,
     autoSim: true,
-  }),
-  1
-);
+  };
+}
+
+function normalizeRide(raw: Ride): Ride {
+  const priceMaximum = typeof raw.priceMaximum === 'number' ? raw.priceMaximum : raw.price;
+  return {
+    ...raw,
+    priceMaximum,
+    quotedAt: raw.quotedAt ?? raw.createdAt,
+    events: Array.isArray(raw.events) ? raw.events : [],
+  };
+}
+
+function revive(saved: Partial<AppState> | null): AppState {
+  const base = initialState();
+  if (!saved || typeof saved !== 'object') return base;
+  const driverSaved = saved.driver ?? base.driver;
+  const share = typeof saved.driverShareDemo === 'number' && saved.driverShareDemo > 0 && saved.driverShareDemo <= 1 ? saved.driverShareDemo : base.driverShareDemo;
+  return {
+    ...base,
+    ...saved,
+    profile: { ...base.profile, ...(saved.profile ?? {}) },
+    consents: { ...base.consents, ...(saved.consents ?? {}) },
+    cities: { ...base.cities, ...(saved.cities ?? {}), geneve: true },
+    driverShareDemo: share,
+    driver: {
+      ...base.driver,
+      ...driverSaved,
+      docs: { ...base.driver.docs, ...(driverSaved.docs ?? {}) },
+      docExpiry: { ...base.driver.docExpiry, ...(driverSaved.docExpiry ?? {}) },
+      refused: Array.isArray(driverSaved.refused) ? driverSaved.refused : [],
+      vehicleCategory: driverSaved.vehicleCategory ?? null,
+      vehicleSeats: typeof driverSaved.vehicleSeats === 'number' ? driverSaved.vehicleSeats : null,
+      vtcCardNumber: driverSaved.vtcCardNumber ?? '',
+      plateLabel: driverSaved.plateLabel ?? '',
+      drivingMinutes: typeof driverSaved.drivingMinutes === 'number' ? driverSaved.drivingMinutes : 0,
+    },
+    rides: Array.isArray(saved.rides) ? saved.rides.map((r) => normalizeRide(r)) : [],
+    journal: Array.isArray(saved.journal) ? saved.journal : [],
+  };
+}
+
+/** Clé inchangée : onyx-transit@v1. La reprise est additive. */
+export const store = createPersistedStore<AppState>('onyx-transit', initialState, 1, revive);
 
 export const STATUS_LABEL: Record<RideStatus, string> = {
   requested: 'Recherche d’un chauffeur',
@@ -87,57 +186,180 @@ export const PAYMENT_LABEL: Record<PaymentKind, string> = {
   apple_pay: 'Apple Pay',
   google_pay: 'Google Pay',
   invoice: 'Facture entreprise',
-  simulated: 'Paiement simulé (démo)',
+  simulated: 'Paiement simulé',
 };
 
-/** Commission plateforme utilisée pour le calcul indicatif des gains chauffeur (démo). */
+/** Commission plateforme utilisée pour le calcul indicatif des gains chauffeur (hypothèse de démo). */
 export const DRIVER_SHARE = 0.8;
 
+export const LOCAL_DRIVER_ID = 'local';
+
+function journalEntry(partial: Omit<JournalEntry, 'id' | 'at'> & { at?: number }): JournalEntry {
+  return { id: uid('evt_'), at: partial.at ?? Date.now(), rideId: partial.rideId, kind: partial.kind, label: partial.label };
+}
+
+export function maximumOf(ride: Ride): number {
+  return typeof ride.priceMaximum === 'number' ? ride.priceMaximum : ride.price;
+}
+
+export function chargedOf(ride: Ride): number | undefined {
+  if (typeof ride.priceCharged === 'number') return ride.priceCharged;
+  if (ride.status === 'completed') return ride.price;
+  return undefined;
+}
+
+export function docReport(s: AppState = store.get(), today = new Date()) {
+  return assessDocs(ALL_DOCS, s.driver.docs, s.driver.docExpiry ?? {}, today);
+}
+
+export function onlineBlockers(s: AppState = store.get()): DocIssue[] {
+  const report = docReport(s);
+  const extra: DocIssue[] = [...report.blockers];
+  if (!s.driver.vehicleCategory) extra.push({ id: 'vehicleCategory', label: 'Catégorie du véhicule', reason: 'missing' });
+  if (s.driver.vehicleSeats == null || s.driver.vehicleSeats < 1) extra.push({ id: 'vehicleSeats', label: 'Nombre de places', reason: 'missing' });
+  return extra;
+}
+
 export function updateRide(id: string, patch: Partial<Ride> | ((r: Ride) => Partial<Ride>), event?: string) {
-  store.set((s) => ({
-    ...s,
-    rides: s.rides.map((r) => {
+  store.set((s) => {
+    let journal = s.journal;
+    const rides = s.rides.map((r) => {
       if (r.id !== id) return r;
-      const p = typeof patch === 'function' ? patch(r) : patch;
-      return { ...r, ...p, events: event ? [...r.events, { at: Date.now(), label: event }] : r.events };
-    }),
-  }));
+      const raw = typeof patch === 'function' ? patch(r) : patch;
+      const max = maximumOf(r);
+      let next: Partial<Ride> = raw;
+      if (typeof raw.price === 'number') {
+        const capped = capToMaximum(max, raw.price);
+        next = { ...next, price: capped.value };
+        if (capped.capped) {
+          journal = [...journal, journalEntry({ rideId: id, kind: 'price', label: 'Prix refusé : au-dessus du maximum annoncé' })];
+        }
+      }
+      if (typeof raw.priceCharged === 'number') {
+        const capped = capToMaximum(max, raw.priceCharged);
+        next = { ...next, priceCharged: capped.value };
+        if (capped.capped) {
+          journal = [...journal, journalEntry({ rideId: id, kind: 'price', label: 'Prix facturé ramené au maximum annoncé' })];
+        }
+      }
+      const events = event ? [...r.events, { at: Date.now(), label: event }] : r.events;
+      if (event) journal = [...journal, journalEntry({ rideId: id, kind: 'status', label: event })];
+      return { ...r, ...next, events };
+    });
+    return { ...s, rides, journal };
+  });
 }
 
 export function activeRide(s: AppState): Ride | undefined {
   return s.rides.find((r) => !r.demo && ['requested', 'accepted', 'arriving', 'in_progress'].includes(r.status));
 }
 
-export function newRide(input: Omit<Ride, 'id' | 'createdAt' | 'status' | 'progress' | 'events' | 'paymentStatus'>): Ride {
+export function newRide(input: Omit<Ride, 'id' | 'createdAt' | 'status' | 'progress' | 'events' | 'paymentStatus' | 'priceMaximum' | 'quotedAt'>): Ride {
+  const now = Date.now();
   return {
     ...input,
     id: uid('ride_'),
-    createdAt: Date.now(),
+    createdAt: now,
+    quotedAt: now,
+    priceMaximum: input.price,
     status: 'requested',
     progress: 0,
     paymentStatus: input.payment === 'simulated' ? 'pending' : 'not_configured',
-    events: [{ at: Date.now(), label: 'Demande envoyée' }],
+    events: [{ at: now, label: 'Demande envoyée — prix maximum horodaté' }],
   };
+}
+
+export function placeRide(ride: Ride) {
+  store.set((s) => ({
+    ...s,
+    rides: [ride, ...s.rides],
+    journal: [
+      ...s.journal,
+      journalEntry({
+        at: ride.quotedAt ?? ride.createdAt,
+        rideId: ride.id,
+        kind: 'quote',
+        label: `Prix maximum annoncé ${ride.priceMaximum ?? ride.price} ${ride.currency}`,
+      }),
+    ],
+  }));
+}
+
+export function shareRate(s: AppState = store.get()): number {
+  return typeof s.driverShareDemo === 'number' ? s.driverShareDemo : DRIVER_SHARE;
 }
 
 /** Avance d’une étape (utilisé par le simulateur et par l’espace chauffeur). */
 export function advanceRide(id: string, driverName = 'Chauffeur Onyx') {
-  const r = store.get().rides.find((x) => x.id === id);
+  const s0 = store.get();
+  const r = s0.rides.find((x) => x.id === id);
   if (!r) return;
+  const card = s0.driver.vtcCardNumber.trim();
+  const plate = s0.driver.plateLabel.trim();
   switch (r.status) {
     case 'requested':
-      return updateRide(id, { status: 'accepted', driverName, progress: 0 }, `Acceptée par ${driverName}`);
+      return updateRide(
+        id,
+        { status: 'accepted', driverName, driverVtcCard: card, plateLabel: plate, progress: 0, assignedDriverId: r.assignedDriverId ?? LOCAL_DRIVER_ID },
+        `Acceptée par ${driverName}`,
+      );
     case 'accepted':
       return updateRide(id, { status: 'arriving', progress: 1 }, 'Chauffeur arrivé au point de prise en charge');
     case 'arriving':
       return updateRide(id, { status: 'in_progress', progress: 0 }, 'Course démarrée');
     case 'in_progress': {
-      updateRide(id, { status: 'completed', progress: 1, paymentStatus: r.payment === 'simulated' ? 'simulated_paid' : 'not_configured' }, 'Course terminée');
+      const charged = capToMaximum(maximumOf(r), r.price).value;
+      updateRide(
+        id,
+        { status: 'completed', progress: 1, priceCharged: charged, paymentStatus: r.payment === 'simulated' ? 'simulated_paid' : 'not_configured' },
+        'Course terminée',
+      );
       const s = store.get();
       if (s.driver.online && !r.simulated) {
-        store.set((x) => ({ ...x, driver: { ...x.driver, sessionEarnings: x.driver.sessionEarnings + r.price * DRIVER_SHARE } }));
+        store.set((x) => ({
+          ...x,
+          driver: {
+            ...x.driver,
+            sessionEarnings: x.driver.sessionEarnings + charged * shareRate(x),
+            drivingMinutes: x.driver.drivingMinutes + r.minutes,
+          },
+        }));
       }
       return;
     }
   }
+}
+
+export function assignRideManually(rideId: string): { ok: boolean; reasons: string[]; notes: string[] } {
+  const s = store.get();
+  const ride = s.rides.find((r) => r.id === rideId);
+  if (!ride) return { ok: false, reasons: ['Course introuvable'], notes: [] };
+  if (ride.status !== 'requested') return { ok: false, reasons: ['Cette course n’est plus en attente'], notes: [] };
+  const cat = CATEGORIES.find((c) => c.id === ride.category);
+  const blockers = docReport(s).blockers;
+  const busy = s.rides.some((r) => r.id !== ride.id && !r.simulated && ['accepted', 'arriving', 'in_progress'].includes(r.status));
+  const decision = canAssign({
+    docBlockers: blockers,
+    vehicleCategory: s.driver.vehicleCategory,
+    rideCategory: ride.category,
+    vehicleSeats: s.driver.vehicleSeats,
+    neededSeats: cat?.seats ?? 1,
+    online: s.driver.online,
+    busy,
+    otrMaxMinutes: parseOtrMaxMinutes(ENV.otr2Limits),
+    drivingMinutes: s.driver.drivingMinutes,
+  });
+  if (!decision.ok) {
+    store.set((x) => ({
+      ...x,
+      journal: [...x.journal, journalEntry({ rideId, kind: 'dispatch_blocked', label: decision.reasons.join(' · ') })],
+    }));
+    return decision;
+  }
+  updateRide(rideId, { assignedDriverId: LOCAL_DRIVER_ID }, 'Attribution manuelle par l’admin');
+  return decision;
+}
+
+export function driverIsBusy(s: AppState, exceptId?: string): boolean {
+  return s.rides.some((r) => r.id !== exceptId && !r.simulated && ['accepted', 'arriving', 'in_progress'].includes(r.status));
 }

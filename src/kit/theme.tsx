@@ -14,6 +14,12 @@ export type Palette = {
   warning: string;
   danger: string;
   info: string;
+  /** Voile de feuille modale. */
+  overlay: string;
+  mapWater: string;
+  mapWaterStroke: string;
+  mapRiver: string;
+  mapLabel: string;
   dark: boolean;
   radius: number;
   fontScale: number;

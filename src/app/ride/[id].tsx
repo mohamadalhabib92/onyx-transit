@@ -7,7 +7,8 @@ import { fmtDateTime, fmtMoney, fmtNumber, fmtTime } from '@/kit/format';
 import { exportText } from '@/kit/files';
 import { RouteMap } from '@/components/RouteMap';
 import { CATEGORIES } from '@/lib/pricing';
-import { PAYMENT_LABEL, STATUS_LABEL, store, updateRide } from '@/state';
+import { companyReady, ENV, vatReady } from '@/config';
+import { chargedOf, maximumOf, PAYMENT_LABEL, STATUS_LABEL, store, updateRide } from '@/state';
 
 const REASONS = ['Prix différent de l’estimation', 'Retard important', 'Comportement du chauffeur', 'Objet oublié', 'Véhicule non conforme', 'Autre'];
 
@@ -37,20 +38,30 @@ export default function RideDetail() {
     [`Temps (${ride.minutes} min)`, ride.minutes * cat.perMin],
   ] as const;
 
+  const maximum = maximumOf(ride);
+  const charged = chargedOf(ride);
   const receiptText = () =>
     [
       'ONYX TRANSIT — REÇU',
+      ride.simulated || ride.payment === 'simulated' ? 'Simulation — aucun débit réel.' : 'Reçu généré localement.',
       `Réf. : ${ride.id}`,
-      `Date : ${fmtDateTime(ride.createdAt)}`,
-      `Client : ${profile.name} <${profile.email}>`,
-      `Trajet : ${ride.pickup.label} → ${ride.dropoff.label}`,
+      `Raison sociale : ${companyReady ? ENV.companyLegalName : 'YOUR_COMPANY_LEGAL_NAME'} (à valider)`,
+      vatReady ? `N° TVA : ${ENV.vatNumber}` : 'N° TVA : non renseigné (YOUR_VAT_NUMBER)',
+      `Date : ${fmtDateTime(ride.createdAt).split(' · ')[0]}`,
+      `Heure : ${fmtTime(ride.createdAt)}`,
+      `Départ : ${ride.pickup.label}`,
+      `Arrivée : ${ride.dropoff.label}`,
+      `Chauffeur : ${ride.driverName ?? 'non assigné'}`,
+      `N° carte VTC : ${ride.driverVtcCard?.trim() || 'non renseigné'}`,
+      `Plaque : ${ride.plateLabel?.trim() || 'non renseignée'}`,
       `Catégorie : ${cat.name} · ${fmtNumber(ride.km, 1)} km · ${ride.minutes} min`,
       ...parts.map(([l, v]) => `  ${l} : ${fmtMoney(v, ride.currency)}`),
-      `  Minimum de course : ${fmtMoney(cat.min, ride.currency)}`,
-      `TOTAL : ${fmtMoney(ride.price, ride.currency)}`,
-      `Paiement : ${PAYMENT_LABEL[ride.payment]} — ${ride.paymentStatus === 'simulated_paid' ? 'simulé, aucun débit' : 'non encaissé (paiement non configuré)'}`,
-      'TVA : selon numéro d’entreprise à configurer (YOUR_VAT_NUMBER).',
-      ride.simulated ? 'DOCUMENT DE DÉMONSTRATION — course simulée.' : 'Reçu indicatif généré localement.',
+      `Prix maximum annoncé : ${fmtMoney(maximum, ride.currency)}`,
+      `Prix maximum horodaté : ${fmtDateTime(ride.quotedAt ?? ride.createdAt)}`,
+      `Prix facturé : ${charged != null ? fmtMoney(charged, ride.currency) : 'non facturé'}`,
+      `Paiement : ${PAYMENT_LABEL[ride.payment]} — ${ride.paymentStatus === 'simulated_paid' ? 'Simulation, aucun débit' : 'non encaissé (paiement non configuré)'}`,
+      vatReady ? 'TVA : selon le n° renseigné — détail comptable à valider.' : 'TVA : non détaillée (YOUR_VAT_NUMBER absent).',
+      `Client : ${profile.name} <${profile.email}>`,
     ]
       .filter(Boolean)
       .join('\n');
@@ -65,7 +76,7 @@ export default function RideDetail() {
         <Badge label={STATUS_LABEL[ride.status]} color={ride.status === 'completed' ? t.success : ride.status === 'cancelled' ? t.danger : t.primary} />
       </Row>
       {ride.simulated ? <Banner kind="demo" text="Course simulée (démonstration) — aucun chauffeur ni paiement réel." /> : null}
-      <RouteMap pickup={ride.pickup} dropoff={ride.dropoff} label={fmtDateTime(ride.createdAt)} />
+      <RouteMap pickup={ride.pickup} dropoff={ride.dropoff} pickupName={ride.pickup.label} dropoffName={ride.dropoff.label} label={fmtDateTime(ride.createdAt)} />
 
       <Card>
         <T v="h3">Reçu</T>
@@ -88,11 +99,15 @@ export default function RideDetail() {
         </Row>
         <Divider />
         <Row style={{ justifyContent: 'space-between' }}>
-          <T v="h3">Total</T>
-          <T v="h2" color={t.primary}>
-            {fmtMoney(ride.price, ride.currency)}
+          <T v="h3">Prix maximum</T>
+          <T v="h2" tabular color={t.primary}>
+            {fmtMoney(maximum, ride.currency)}
           </T>
         </Row>
+        <T v="small" muted>
+          Horodaté le {fmtDateTime(ride.quotedAt ?? ride.createdAt)}. Prix facturé : {charged != null ? fmtMoney(charged, ride.currency) : 'non facturé'}.
+        </T>
+        {ride.simulated || ride.payment === 'simulated' ? <Badge label="Simulation" color={t.accent} /> : null}
         <T v="small" muted>
           {PAYMENT_LABEL[ride.payment]} — {ride.paymentStatus === 'simulated_paid' ? 'paiement simulé, aucun débit réel' : ride.paymentStatus === 'pending' ? 'en attente' : 'non encaissé : paiement en ligne non configuré'}
         </T>

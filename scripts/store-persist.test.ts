@@ -6,7 +6,8 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function memory() {
   const data = new Map<string, string>();
-  const flags = { deferRead: false, failRead: false };
+  const flags = { deferRead: false, failRead: false, failWrite: false };
+  const keys: string[] = [];
   let writes = 0;
   let removes = 0;
   let pending: ((value: string | null) => void) | null = null;
@@ -26,6 +27,11 @@ function memory() {
         resolve(data.has(key) ? data.get(key)! : null);
       }),
     setItem: async (key, value) => {
+      if (flags.failWrite) {
+        flags.failWrite = false;
+        throw new Error('write-failed');
+      }
+      keys.push(key);
       writes += 1;
       data.set(key, value);
     },
@@ -37,6 +43,7 @@ function memory() {
   return {
     storage,
     data,
+    keys,
     get writes() {
       return writes;
     },
@@ -48,6 +55,9 @@ function memory() {
     },
     set failRead(value: boolean) {
       flags.failRead = value;
+    },
+    set failWrite(value: boolean) {
+      flags.failWrite = value;
     },
     release() {
       const go = pending;
@@ -96,15 +106,81 @@ test('une lecture en échec bloque set et reset', async () => {
   assert.equal(mem.data.get('box@v1'), JSON.stringify({ name: 'Ada' }));
 });
 
-test('un JSON illisible n’est pas remplacé par l’état initial', async () => {
+test('un JSON illisible est copié sans écraser l’original, puis le départ à zéro réactive l’enregistrement', async () => {
   const mem = memory();
-  mem.data.set('box@v1', '{cassé');
+  const raw = '{cassé';
+  mem.data.set('box@v1', raw);
   const store = createPersistedStore('box', () => ({ name: '' }), 1, undefined, mem.storage);
-  await store.hydrate();
+  const result = await store.hydrate();
+  assert.equal(result.status, 'corrupt');
+  if (result.status !== 'corrupt') return;
+  assert.match(result.backupKey, /^box@v1\.corrupt-\d{4}-\d{2}-\d{2}$/);
+  assert.equal(mem.data.get('box@v1'), raw);
+  assert.equal(mem.data.get(result.backupKey), raw);
+  assert.deepEqual(mem.keys, [result.backupKey]);
   store.set({ name: 'nouveau' });
   await wait(200);
+  assert.equal(mem.data.get('box@v1'), raw);
+  assert.deepEqual(mem.keys, [result.backupKey]);
+  await store.startFresh();
+  assert.equal(mem.data.get(result.backupKey), raw);
+  assert.deepEqual(JSON.parse(mem.data.get('box@v1')!), { name: '' });
+  store.set({ name: 'Ada' });
+  await wait(200);
+  assert.deepEqual(JSON.parse(mem.data.get('box@v1')!), { name: 'Ada' });
+});
+
+test('si la copie échoue, l’original illisible n’est pas remplacé', async () => {
+  const mem = memory();
+  const raw = '{cassé';
+  mem.data.set('box@v1', raw);
+  mem.failWrite = true;
+  const store = createPersistedStore('box', () => ({ name: '' }), 1, undefined, mem.storage);
+  const result = await store.hydrate();
+  assert.equal(result.status, 'corrupt-copy-failed');
+  assert.equal(mem.data.get('box@v1'), raw);
+  assert.equal(mem.keys.length, 0);
+  await store.startFresh();
+  assert.equal(mem.data.get('box@v1'), raw);
   assert.equal(mem.writes, 0);
-  assert.equal(mem.data.get('box@v1'), '{cassé');
+});
+
+test('une réservation saisie pendant la lecture est abandonnée et signalée', async () => {
+  const mem = memory();
+  mem.data.set('box@v1', JSON.stringify({ rides: [] as string[] }));
+  mem.deferRead = true;
+  const lost: string[][] = [];
+  const store = createPersistedStore(
+    'box',
+    () => ({ rides: [] as string[] }),
+    1,
+    undefined,
+    mem.storage,
+    (previous, loaded) => {
+      const kept = new Set(loaded.rides);
+      const gone = previous.rides.filter((id) => !kept.has(id));
+      if (gone.length) lost.push(gone);
+    },
+  );
+  const reading = store.hydrate();
+  store.set({ rides: ['course-nouvelle'] });
+  mem.release();
+  await reading;
+  assert.deepEqual(store.get().rides, []);
+  assert.deepEqual(lost, [['course-nouvelle']]);
+  assert.deepEqual(JSON.parse(mem.data.get('box@v1')!).rides, []);
+});
+
+test('une lecture sans saisie intermédiaire ne signale aucun abandon', async () => {
+  const mem = memory();
+  mem.data.set('box@v1', JSON.stringify({ rides: ['déjà'] }));
+  let calls = 0;
+  const store = createPersistedStore('box', () => ({ rides: [] as string[] }), 1, undefined, mem.storage, () => {
+    calls += 1;
+  });
+  await store.hydrate();
+  assert.equal(calls, 0);
+  assert.deepEqual(store.get().rides, ['déjà']);
 });
 
 test('stockage vide : la lecture réussit et les enregistrements suivants sont permis', async () => {

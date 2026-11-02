@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePrefersReducedMotion } from './a11y';
 import { useOnline } from './net';
+import type { HydrateResult } from './store';
 import { alpha, useTheme } from './theme';
 
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -575,19 +576,49 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 /* ---------- Boot sans "Loading" infini ---------- */
-export function BootGate({ hydrate, children, appName, timeoutMs = 4000 }: { hydrate: () => Promise<void>; children: React.ReactNode; appName: string; timeoutMs?: number }) {
-  const [state, setState] = useState<'loading' | 'ready' | 'fallback'>('loading');
+export function BootGate({
+  hydrate,
+  recover,
+  children,
+  appName,
+  timeoutMs = 4000,
+}: {
+  hydrate: () => Promise<HydrateResult>;
+  /** Repart de zéro après copie d’un stockage illisible. */
+  recover?: () => Promise<void>;
+  children: React.ReactNode;
+  appName: string;
+  timeoutMs?: number;
+}) {
+  const [state, setState] = useState<'loading' | 'ready' | 'fallback' | 'corrupt' | 'copy-failed'>('loading');
+  const [backupKey, setBackupKey] = useState<string | null>(null);
+  const [confirmFresh, setConfirmFresh] = useState(false);
+  const [recoverError, setRecoverError] = useState<string | null>(null);
   const t = useTheme();
   const run = useCallback(() => {
     setState('loading');
+    setConfirmFresh(false);
+    setRecoverError(null);
     let done = false;
     const timer = setTimeout(() => {
       if (!done) setState('fallback');
     }, timeoutMs);
     hydrate()
-      .then(() => {
+      .then((result) => {
+        if (result.status === 'ignored') return;
         done = true;
         clearTimeout(timer);
+        if (result.status === 'corrupt') {
+          setBackupKey(result.backupKey);
+          setState('corrupt');
+          return;
+        }
+        if (result.status === 'corrupt-copy-failed') {
+          setBackupKey(null);
+          setState('copy-failed');
+          return;
+        }
+        setBackupKey(null);
         setState('ready');
       })
       .catch(() => {
@@ -600,23 +631,96 @@ export function BootGate({ hydrate, children, appName, timeoutMs = 4000 }: { hyd
     run();
   }, [run]);
 
-  if (state === 'ready') return <>{children}</>;
-  if (state === 'loading')
+  const confirmReset = async () => {
+    if (!recover) return;
+    setRecoverError(null);
+    try {
+      await recover();
+      setBackupKey(null);
+      setConfirmFresh(false);
+      setState('ready');
+    } catch {
+      setRecoverError('Le remplacement n’a pas abouti. L’original n’a pas été modifié si la copie était déjà en place.');
+    }
+  };
+
+  const frame = (body: React.ReactNode) => (
+    <View style={{ flex: 1, backgroundColor: t.bg, padding: 24, gap: 14, justifyContent: 'center', maxWidth: 520, width: '100%', alignSelf: 'center' }}>{body}</View>
+  );
+
+  if (state === 'ready') {
     return (
-      <View style={{ flex: 1, backgroundColor: t.bg, padding: 24, gap: 14, justifyContent: 'center', maxWidth: 520, width: '100%', alignSelf: 'center' }}>
+      <View style={{ flex: 1 }}>
+        {backupKey ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <Banner
+              kind="danger"
+              title="Enregistrement désactivé"
+              text={`Les données illisibles restent sous la clé d’origine. Copie : ${backupKey}. Rien de nouveau n’est enregistré tant que vous ne repartez pas de zéro.`}
+              action={<Button small kind="danger" title="Repartir de zéro" onPress={() => setConfirmFresh(true)} />}
+            />
+            {confirmFresh ? (
+              <View style={{ gap: 8, marginTop: 8 }}>
+                <T v="small">Confirmez pour remplacer l’original par un profil vide. La copie « {backupKey} » est conservée.</T>
+                {recoverError ? <T v="small" color={t.danger}>{recoverError}</T> : null}
+                <Button title="Oui, repartir de zéro" kind="danger" onPress={confirmReset} />
+                <Button title="Annuler" kind="secondary" onPress={() => setConfirmFresh(false)} />
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+        <View style={{ flex: 1 }}>{children}</View>
+      </View>
+    );
+  }
+  if (state === 'loading')
+    return frame(
+      <>
         <T v="h2" center>
           {appName}
         </T>
         <Skeleton height={22} />
         <Skeleton height={90} />
         <Skeleton height={90} />
-      </View>
+      </>,
     );
-  return (
-    <View style={{ flex: 1, backgroundColor: t.bg, padding: 24, gap: 14, justifyContent: 'center', maxWidth: 520, width: '100%', alignSelf: 'center' }}>
+  if (state === 'corrupt')
+    return frame(
+      <>
+        <T v="h2">Données illisibles</T>
+        <Banner
+          kind="danger"
+          title="Lecture impossible"
+          text={`Les données enregistrées sur cet appareil n’ont pas pu être lues. Une copie brute a été faite sous « ${backupKey} ». L’original n’a pas été écrasé.`}
+        />
+        {confirmFresh ? (
+          <>
+            <T>Repartir de zéro remplace l’original par un profil vide. La copie « {backupKey} » reste en place. L’enregistrement fonctionne ensuite normalement.</T>
+            {recoverError ? <T v="small" color={t.danger}>{recoverError}</T> : null}
+            <Button title="Oui, repartir de zéro" kind="danger" icon="trash" onPress={confirmReset} />
+            <Button title="Annuler" kind="secondary" onPress={() => setConfirmFresh(false)} />
+          </>
+        ) : (
+          <>
+            <Button title="Repartir de zéro" kind="danger" onPress={() => setConfirmFresh(true)} />
+            <Button title="Continuer sans enregistrer" kind="secondary" onPress={() => setState('ready')} />
+          </>
+        )}
+      </>,
+    );
+  if (state === 'copy-failed')
+    return frame(
+      <>
+        <T v="h2">Copie impossible</T>
+        <Banner kind="danger" title="Données illisibles" text="La copie de sauvegarde a échoué. L’original n’a pas été modifié et rien n’a été enregistré." />
+        <Button title="Réessayer" icon="refresh" onPress={run} />
+      </>,
+    );
+  return frame(
+    <>
       <Banner kind="warning" title="Chargement plus long que prévu" text="La lecture du stockage n’a pas abouti. Réessayer la relance. Continuer n’écrit rien : les données déjà enregistrées ne sont pas remplacées par un état vide." />
       <Button title="Réessayer" icon="refresh" onPress={run} />
       <Button title="Continuer hors ligne" kind="secondary" onPress={() => setState('ready')} />
-    </View>
+    </>,
   );
 }

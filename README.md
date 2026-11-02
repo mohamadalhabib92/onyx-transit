@@ -1,7 +1,7 @@
 # Onyx Transit — chauffeur privé premium (Genève)
 
 Application **Expo (React Native + expo-router, TypeScript)** pour iOS, Android et **PWA installable**.
-Recréée à partir du cahier des charges `05-onyx-transit.md`. Tout le parcours principal fonctionne **hors ligne, sur l’appareil** (stockage local `onyx-transit@v1`), sans aucune API payante. « Continuer hors ligne » n’écrit rien tant que cette lecture n’a pas réussi, pour ne pas remplacer les données par un état vide.
+Recréée à partir du cahier des charges `05-onyx-transit.md`. Tout le parcours principal fonctionne **hors ligne, sur l’appareil** (stockage local `onyx-transit@v1`), sans aucune API payante. « Continuer hors ligne » n’écrit rien tant que cette lecture n’a pas réussi. Si les données sont illisibles, une copie est faite sous une autre clé avant toute proposition de repartir de zéro. Le `baseUrl` `/onyx-transit` reste pour le web ; `app.config.js` le retire seulement quand `EAS_BUILD` est défini.
 
 ## Fonctionnalités
 

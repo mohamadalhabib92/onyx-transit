@@ -1,4 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createPersistedStore, uid } from '@/kit/store';
+import { publishLostRides, type LostRide } from '@/lib/lost-rides';
 import { CATEGORIES, type CategoryId, type LatLon } from '@/lib/pricing';
 import { assessDocs, canAssign, capToMaximum, parseOtrMaxMinutes, type DocDef, type DocIssue } from '@/lib/rules';
 import type { City } from '@/data/places';
@@ -169,8 +171,14 @@ function revive(saved: Partial<AppState> | null): AppState {
   };
 }
 
+function noteInterimDiscard(previous: AppState, loaded: AppState) {
+  const kept = new Set((loaded.rides ?? []).map((r) => r.id));
+  const lost: LostRide[] = (previous.rides ?? []).filter((r) => !kept.has(r.id)).map((r) => ({ id: r.id, label: `${r.pickup?.label ?? 'départ'} → ${r.dropoff?.label ?? 'arrivée'}` }));
+  if (lost.length) publishLostRides(lost);
+}
+
 /** Clé inchangée : onyx-transit@v1. La reprise est additive. */
-export const store = createPersistedStore<AppState>('onyx-transit', initialState, 1, revive);
+export const store = createPersistedStore<AppState>('onyx-transit', initialState, 1, revive, AsyncStorage, noteInterimDiscard);
 
 export const STATUS_LABEL: Record<RideStatus, string> = {
   requested: 'Recherche d’un chauffeur',

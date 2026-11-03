@@ -1,14 +1,14 @@
 # Onyx Transit — chauffeur privé premium (Genève)
 
 Application **Expo (React Native + expo-router, TypeScript)** pour iOS, Android et **PWA installable**.
-Recréée à partir du cahier des charges `05-onyx-transit.md`. Tout le parcours principal fonctionne **hors ligne, sur l’appareil** (stockage local), sans aucune API payante.
+Recréée à partir du cahier des charges `05-onyx-transit.md`. Tout le parcours principal fonctionne **hors ligne, sur l’appareil** (stockage local `onyx-transit@v1`), sans aucune API payante. « Continuer hors ligne » n’écrit rien tant que cette lecture n’a pas réussi. Si les données sont illisibles, une copie est faite sous une autre clé avant toute proposition de repartir de zéro. Le `baseUrl` `/onyx-transit` reste pour le web ; `app.config.js` le retire seulement quand `EAS_BUILD` est défini.
 
 ## Fonctionnalités
 
 **Client**
 - Profil local + consentements RGPD/nLPD (CGU, confidentialité obligatoires ; GPS et marketing facultatifs et révocables).
 - Départ/destination : lieux publics de Genève (aéroport, Cornavin, Palais des Nations…) ou **position GPS** (expo-location, avec consentement).
-- Estimation de prix locale (distance × 1,3, temps urbain) pour 3 catégories — Business, First, Van VIP — **tarifs indicatifs étiquetés « démo »**.
+- Prix **maximum** local (distance × 1,3, étiqueté « Simulation ») pour 3 catégories — Business, First, Van VIP. Il est horodaté et ne peut pas être dépassé. Grille réelle : `YOUR_TARIFF_TABLE`.
 - Carte **schématique** dessinée en SVG (Lac Léman, Rhône, Arve simplifiés) — aucune tuile cartographique ni clé.
 - Suivi de course : demande → chauffeur en route → arrivé → en course → terminée. Le **suivi simulé** est clairement indiqué ; on peut le désactiver pour piloter la course depuis l’espace chauffeur.
 - Reçu détaillé (téléchargeable en .txt), notation 1–5 ★, réclamation à l’amiable, historique des trajets.
@@ -16,7 +16,7 @@ Recréée à partir du cahier des charges `05-onyx-transit.md`. Tout le parcours
 - Assistance (FAQ, numéros d’urgence suisses), états vides/erreur, badge hors ligne.
 
 **Chauffeur**
-- En ligne / hors ligne, gains de la session (part chauffeur 80 % = hypothèse démo).
+- En ligne / hors ligne **bloqué** sans documents chauffeur et véhicule validés et non expirés. Gains de session : hypothèse de démo (80 % par défaut), éditable par l’admin, masquée au client.
 - Accepter / refuser, naviguer vers la prise en charge et la destination (lien Google Maps), « Arrivé », « Démarrer », « Terminer ».
 - Documents réglementaires : statut local (aucun fichier envoyé tant que le stockage n’est pas configuré).
 - Véhicule représenté par une silhouette générique (aucune photo de marque).
@@ -24,12 +24,14 @@ Recréée à partir du cahier des charges `05-onyx-transit.md`. Tout le parcours
 **Admin**
 - Courses (indicateurs **calculés** sur les données locales, aucun KPI inventé), export CSV.
 - Utilisateurs, chauffeurs (validation des documents), litiges (clôture à l’amiable).
-- Villes : Genève active ; Paris et Casablanca désactivées (activables, affichées « bientôt »).
+- Villes : Genève active. Paris et Casablanca restent derrière `CITY_PARIS` / `CITY_CASABLANCA` (false) et ne sont pas présentées comme ouvertes.
+- Dispatch manuel (admin) avec contrôles documents, catégorie, places, disponibilité. Journal append-only exportable.
+- Repli de chargement (timeout) et error boundary. Sentry désactivé tant que `EXPO_PUBLIC_SENTRY_DSN=YOUR_SENTRY_DSN`.
 - Système : **Backend cible** `EXPO_PUBLIC_API_BASE_URL=YOUR_API_BASE_URL`, statut de chaque variable, **Dispatch IA = Phase 2 (désactivé)**.
 
 **Confidentialité** : bases légales, durées de conservation, export JSON de toutes mes données, suppression du compte.
 
-> Correctif web : les styles utilisent `transformOrigin` (camelCase) — plus de `transform-origin` invalide.
+> Correctif web vérifié : le halo de la carte utilise `transformOrigin` (camelCase), compilé en CSS valide. `EXPO_PUBLIC_EXAMPLE_EN` n’est pas lu.
 
 ## Lancer en local
 
@@ -72,7 +74,13 @@ Copiez `.env.example` en `.env`. **Aucune vraie clé n’est fournie** ; sans co
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY` | clé anon (RLS) | app (public) |
 | `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=YOUR_STRIPE_PUBLISHABLE_KEY` | paiement carte | app (public) |
 | `EXPO_PUBLIC_API_BASE_URL=YOUR_API_BASE_URL` | backend (dispatch, paiements serveur) | app (public) |
-| `STRIPE_SECRET_KEY=YOUR_STRIPE_SECRET_KEY` | encaissement | **serveur uniquement** |
+| `EXPO_PUBLIC_SENTRY_DSN=YOUR_SENTRY_DSN` | crash, désactivé si placeholder | app (public) |
+| `EXPO_PUBLIC_COMPANY_LEGAL_NAME`, `EXPO_PUBLIC_VAT_NUMBER`, `EXPO_PUBLIC_DPO_EMAIL`, `EXPO_PUBLIC_SUPPORT_EMAIL` | reçus et contacts | app (public) |
+| `EXPO_PUBLIC_TARIFF_TABLE`, `EXPO_PUBLIC_FREE_CANCEL_HOURS`, `EXPO_PUBLIC_OTR2_LIMITS`, `EXPO_PUBLIC_OPERATING_MODEL` | conformité, à valider | app (public) |
+| `EXPO_PUBLIC_CITY_PARIS=false`, `EXPO_PUBLIC_CITY_CASABLANCA=false`, `EXPO_PUBLIC_FEATURE_TWINT=false`, `EXPO_PUBLIC_FEATURE_AI_DISPATCH=false` | flags | app (public) |
+| `STRIPE_SECRET_KEY=YOUR_STRIPE_SECRET_KEY`, `YOUR_MAPS_API_KEY`, `YOUR_SWISS_IBAN` | encaissement, cartes, facture | **serveur uniquement** |
+
+Ne pas définir `EXPO_PUBLIC_EXAMPLE_EN`. Les builds gardent `EXPO_NO_CAPABILITY_SYNC=1`.
 
 Autres textes à compléter avant lancement : `YOUR_COMPANY_LEGAL_NAME`, `YOUR_DPO_EMAIL`, `YOUR_SUPPORT_EMAIL`, `YOUR_VAT_NUMBER`, identifiants `com.yourcompany.*` dans `app.json`.
 

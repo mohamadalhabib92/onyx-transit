@@ -11,7 +11,7 @@ export default function Payments() {
   const toast = useToast();
   const s = store.use();
   const methods: { k: PaymentKind; icon: React.ComponentProps<typeof Ionicons>['name']; sub: string; enabled: boolean; badge?: string }[] = [
-    { k: 'simulated', icon: 'flask', sub: 'Aucun débit — pour tester le parcours complet', enabled: true, badge: 'Démo' },
+    { k: 'simulated', icon: 'flask', sub: 'Simulation — aucun débit réel', enabled: true, badge: 'Simulation' },
     { k: 'card_stripe', icon: 'card', sub: stripeReady ? 'Carte enregistrée via Stripe' : 'Configuration manquante : YOUR_STRIPE_PUBLISHABLE_KEY + backend (YOUR_API_BASE_URL)', enabled: stripeReady, badge: stripeReady ? undefined : 'Non configuré' },
     { k: 'apple_pay', icon: 'logo-apple', sub: 'Prévu en Phase 1.1 (via Stripe)', enabled: false, badge: 'Phase 1.1' },
     { k: 'google_pay', icon: 'logo-google', sub: 'Prévu en Phase 1.1 (via Stripe)', enabled: false, badge: 'Phase 1.1' },

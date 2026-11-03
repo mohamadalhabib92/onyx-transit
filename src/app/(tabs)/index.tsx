@@ -4,12 +4,13 @@ import { useRouter } from 'expo-router';
 import { Badge, Banner, Button, Card, Chip, DemoBadge, Divider, EmptyState, Ionicons, OfflineBadge, Progress, Row, Screen, T, ToggleRow, useToast } from '@/kit/ui';
 import { alpha, useTheme } from '@/kit/theme';
 import { useOnline } from '@/kit/net';
-import { fmtMoney, fmtNumber, fmtTime } from '@/kit/format';
+import { fmtDateTime, fmtMoney, fmtNumber, fmtTime } from '@/kit/format';
 import { RouteMap } from '@/components/RouteMap';
 import { PlacePicker } from '@/components/PlacePicker';
 import { CATEGORIES, estimate, type CategoryId } from '@/lib/pricing';
 import { CITIES } from '@/data/places';
-import { activeRide, newRide, PAYMENT_LABEL, STATUS_LABEL, store, updateRide, type Ride, type Stop } from '@/state';
+import { cityOpen, ENV } from '@/config';
+import { activeRide, maximumOf, newRide, PAYMENT_LABEL, placeRide, STATUS_LABEL, store, updateRide, type Ride, type Stop } from '@/state';
 
 const STEPS: Ride['status'][] = ['requested', 'accepted', 'arriving', 'in_progress', 'completed'];
 
@@ -25,11 +26,11 @@ function ActiveRide({ ride }: { ride: Ride }) {
   return (
     <>
       {ride.simulated ? (
-        <Banner kind="demo" title="Suivi simulé — démonstration" text="Aucun véhicule réel n’est engagé. La position et les étapes sont générées localement pour illustrer le parcours." />
+        <Banner kind="demo" title="Simulation" text="Suivi simulé. Aucun véhicule réel n’est engagé. La position et les étapes sont générées localement." />
       ) : ride.status === 'requested' ? (
         <Banner kind="info" title="En attente d’un chauffeur" text="Mode démo sur un seul appareil : ouvrez l’onglet Chauffeur, passez en ligne et acceptez la demande." />
       ) : null}
-      <RouteMap pickup={ride.pickup} dropoff={ride.dropoff} car={car} label={`${ride.pickup.label} → ${ride.dropoff.label}`} />
+      <RouteMap pickup={ride.pickup} dropoff={ride.dropoff} pickupName={ride.pickup.label} dropoffName={ride.dropoff.label} car={car} label={`${ride.pickup.label} → ${ride.dropoff.label}`} />
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <T v="h2">{STATUS_LABEL[ride.status]}</T>
@@ -55,7 +56,7 @@ function ActiveRide({ ride }: { ride: Ride }) {
             <View style={{ flex: 1 }}>
               <T style={{ fontWeight: '700' }}>{ride.driverName ?? 'Chauffeur'}</T>
               <T v="small" muted>
-                {cat.name} · plaque GE ••• {ride.simulated ? '(démo)' : ''}
+                {cat.name} · {ride.plateLabel ? ride.plateLabel : 'plaque non renseignée'} {ride.simulated ? '· Simulation' : ''}
               </T>
             </View>
             <Ionicons name={cat.icon} size={28} color={t.primary} />
@@ -63,12 +64,20 @@ function ActiveRide({ ride }: { ride: Ride }) {
         )}
         <Divider />
         <Row style={{ justifyContent: 'space-between' }}>
-          <T muted>Prix estimé</T>
-          <T v="h3">{fmtMoney(ride.price, ride.currency)}</T>
+          <T muted>Prix maximum</T>
+          <T v="h3" tabular>
+            {fmtMoney(maximumOf(ride), ride.currency)}
+          </T>
         </Row>
+        <T v="small" muted>
+          Annoncé le {fmtDateTime(ride.quotedAt ?? ride.createdAt)}. Il ne peut pas être dépassé sans un nouveau prix accepté.
+        </T>
         <Row style={{ justifyContent: 'space-between' }}>
           <T muted>Paiement</T>
-          <T v="small">{PAYMENT_LABEL[ride.payment]}</T>
+          <Row gap={6}>
+            {ride.payment === 'simulated' ? <DemoBadge /> : null}
+            <T v="small">{PAYMENT_LABEL[ride.payment]}</T>
+          </Row>
         </Row>
       </Card>
       {ride.simulated ? <ToggleRow label="Simulation automatique" sub="Désactivez pour mettre le suivi en pause" value={autoSim} onChange={(v) => store.set((s) => ({ ...s, autoSim: v }))} /> : null}
@@ -80,7 +89,7 @@ function ActiveRide({ ride }: { ride: Ride }) {
             icon="close-circle"
             onPress={() => {
               updateRide(ride.id, { status: 'cancelled' }, 'Annulée par le client');
-              toast('Course annulée — aucuns frais (démo)', 'info');
+              toast(`Course annulée. Frais non calculés (${ENV.freeCancelHours} — à valider).`, 'info');
             }}
           />
         ) : null}
@@ -103,7 +112,7 @@ export default function Book() {
   const [cat, setCat] = useState<CategoryId>('business');
   const [picker, setPicker] = useState<'pickup' | 'dropoff' | null>(null);
   const [city, setCity] = useState<'geneve' | 'paris' | 'casablanca'>('geneve');
-  const enabledCities = CITIES.filter((c) => s.cities[c.id]);
+  const enabledCities = CITIES.filter((c) => cityOpen(c.id, s.cities[c.id]));
 
   const est = useMemo(() => (pickup && dropoff ? CATEGORIES.map((c) => ({ c, e: estimate(pickup, dropoff, c) })) : null), [pickup, dropoff]);
   const chosen = est?.find((x) => x.c.id === cat);
@@ -112,8 +121,8 @@ export default function Book() {
   const book = () => {
     if (!pickup || !dropoff || !chosen) return;
     const r = newRide({ pickup, dropoff, category: cat, km: chosen.e.km, minutes: chosen.e.min, price: chosen.e.price, currency: 'CHF', simulated: s.autoSim, demo: false, payment: s.payment });
-    store.set((x) => ({ ...x, rides: [r, ...x.rides] }));
-    toast('Demande envoyée', 'success');
+    placeRide(r);
+    toast('Demande envoyée — prix maximum horodaté', 'success');
   };
 
   return (
@@ -143,7 +152,7 @@ export default function Book() {
             </Row>
           ) : null}
           {city !== 'geneve' ? (
-            <EmptyState icon="construct" title={`${CITIES.find((c) => c.id === city)?.name} — bientôt`} text="Ville activée par l’admin, mais le pack local (lieux, tarifs, réglementation, chauffeurs) n’est pas encore préparé. Réservation indisponible." />
+            <EmptyState icon="construct" title={`${CITIES.find((c) => c.id === city)?.name} — non ouvert`} text="Cadre légal à étudier. Ce city pack n’est pas une ville ouverte : la réservation reste indisponible." />
           ) : (
             <>
               <Card>
@@ -170,7 +179,7 @@ export default function Book() {
                 })}
               </Card>
 
-              <RouteMap pickup={pickup} dropoff={dropoff} />
+              <RouteMap pickup={pickup} dropoff={dropoff} pickupName={pickup?.label} dropoffName={dropoff?.label} />
 
               {same ? <Banner kind="warning" text="Le départ et la destination sont identiques." /> : null}
 
@@ -178,7 +187,7 @@ export default function Book() {
                 <>
                   <Row style={{ justifyContent: 'space-between' }}>
                     <T v="h3">Catégorie</T>
-                    <DemoBadge label="Tarifs indicatifs (démo)" />
+                    <DemoBadge label="Simulation" />
                   </Row>
                   {est.map(({ c, e }) => {
                     const sel = c.id === cat;
@@ -208,7 +217,7 @@ export default function Book() {
                             {fmtNumber(e.km, 1)} km · ≈ {e.min} min · arrivée ≈ {fmtTime(Date.now() + (e.min + 6) * 60000)}
                           </T>
                         </View>
-                        <T v="h3" color={sel ? t.primary : t.text}>
+                        <T v="h3" tabular color={sel ? t.primary : t.text}>
                           {fmtMoney(e.price, 'CHF', 0)}
                         </T>
                       </Pressable>
@@ -223,10 +232,10 @@ export default function Book() {
                       </T>
                     </Row>
                   </Card>
-                  <ToggleRow label="Course simulée (démo)" sub="Activé : un chauffeur fictif accepte et le trajet est animé. Désactivé : la demande attend l’onglet Chauffeur." value={s.autoSim} onChange={(v) => store.set((x) => ({ ...x, autoSim: v }))} />
-                  <Button title={`Commander ${chosen?.c.name ?? ''} · ${chosen ? fmtMoney(chosen.e.price, 'CHF', 0) : ''}`} icon="checkmark-circle" onPress={book} full />
+                  <ToggleRow label="Course simulée" sub="Simulation : un chauffeur fictif accepte et le trajet est animé. Désactivé : la demande attend l’onglet Chauffeur." value={s.autoSim} onChange={(v) => store.set((x) => ({ ...x, autoSim: v }))} />
+                  <Button title={`Commander ${chosen?.c.name ?? ''} · max. ${chosen ? fmtMoney(chosen.e.price, 'CHF', 0) : ''}`} icon="checkmark-circle" onPress={book} full />
                   <T v="small" muted center>
-                    Estimation fondée sur la distance (vol d’oiseau × 1,3) et un temps urbain moyen. Prix final confirmé par l’opérateur.
+                    Prix maximum de simulation (distance × 1,3). Il est horodaté à la confirmation et ne sera pas augmenté sans votre accord. Tarifs réels : {ENV.tariffTable} — à valider.
                   </T>
                 </>
               ) : !pickup || !dropoff ? (

@@ -27,9 +27,11 @@ export const DAYS_FR_SHORT = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 's
 
 const p2 = (n: number) => String(n).padStart(2, '0');
 
+/** Date suisse JJ.MM.AAAA. */
 export function fmtDate(d: Date | number | string, withYear = true): string {
   const x = new Date(d);
-  return `${x.getDate()} ${MONTHS_FR[x.getMonth()]}${withYear ? ' ' + x.getFullYear() : ''}`;
+  const day = `${p2(x.getDate())}.${p2(x.getMonth() + 1)}`;
+  return withYear ? `${day}.${x.getFullYear()}` : day;
 }
 export function fmtTime(d: Date | number | string): string {
   const x = new Date(d);

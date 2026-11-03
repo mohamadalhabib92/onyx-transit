@@ -4,15 +4,17 @@ import { useRouter } from 'expo-router';
 import { Badge, Banner, Button, Card, Chip, EmptyState, Field, ListItem, Row, Screen, Section, Stat, T, ToggleRow, useToast } from '@/kit/ui';
 import { useTheme } from '@/kit/theme';
 import { isConfigured, maskValue } from '@/kit/config';
-import { fmtDateTime, fmtMoney } from '@/kit/format';
+import { fmtDate, fmtDateTime, fmtMoney } from '@/kit/format';
 import { exportText, toCSV } from '@/kit/files';
 import { CITIES } from '@/data/places';
-import { CONFIG, ENV } from '@/config';
-import { DRIVER_DOCS, STATUS_LABEL, store, updateRide } from '@/state';
+import { ManualDispatch } from '@/components/ManualDispatch';
+import { cityOpen, CONFIG, ENV, staleExampleEnv } from '@/config';
+import { ALL_DOCS, docReport, shareRate, STATUS_LABEL, store, updateRide } from '@/state';
 
-type Tab = 'rides' | 'users' | 'drivers' | 'disputes' | 'cities' | 'system';
+type Tab = 'rides' | 'dispatch' | 'users' | 'drivers' | 'disputes' | 'cities' | 'system';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'rides', label: 'Courses' },
+  { key: 'dispatch', label: 'Dispatch' },
   { key: 'users', label: 'Utilisateurs' },
   { key: 'drivers', label: 'Chauffeurs' },
   { key: 'disputes', label: 'Litiges' },
@@ -61,8 +63,24 @@ export default function Admin() {
               exportText(
                 'onyx-courses.csv',
                 toCSV([
-                  ['id', 'date', 'depart', 'destination', 'categorie', 'km', 'minutes', 'prix_chf', 'statut', 'simulee', 'test', 'note'],
-                  ...s.rides.map((r) => [r.id, fmtDateTime(r.createdAt), r.pickup.label, r.dropoff.label, r.category, r.km, r.minutes, r.price, STATUS_LABEL[r.status], r.simulated ? 'oui' : 'non', r.demo ? 'oui' : 'non', r.rating ?? '']),
+                  ['id', 'date', 'depart', 'destination', 'categorie', 'km', 'minutes', 'prix_chf', 'prix_maximum', 'prix_facture', 'devis_horodate', 'statut', 'simulee', 'test', 'note'],
+                  ...s.rides.map((r) => [r.id, fmtDateTime(r.createdAt), r.pickup.label, r.dropoff.label, r.category, r.km, r.minutes, r.price, r.priceMaximum ?? r.price, r.priceCharged ?? '', r.quotedAt ? fmtDateTime(r.quotedAt) : '', STATUS_LABEL[r.status], r.simulated ? 'oui' : 'non', r.demo ? 'oui' : 'non', r.rating ?? '']),
+                ]),
+                'text/csv'
+              )
+            }
+          />
+          <Button
+            title="Exporter le journal (CSV)"
+            kind="secondary"
+            icon="download"
+            disabled={!s.journal.length}
+            onPress={() =>
+              exportText(
+                'onyx-journal.csv',
+                toCSV([
+                  ['id', 'horodatage', 'course', 'type', 'libelle'],
+                  ...s.journal.map((e) => [e.id, fmtDateTime(e.at), e.rideId ?? '', e.kind, e.label]),
                 ]),
                 'text/csv'
               )
@@ -87,6 +105,8 @@ export default function Admin() {
         </>
       ) : null}
 
+      {tab === 'dispatch' ? <ManualDispatch /> : null}
+
       {tab === 'users' ? (
         <>
           <Card>
@@ -102,18 +122,34 @@ export default function Admin() {
           <T v="small" muted>
             {s.driver.online ? 'En ligne' : 'Hors ligne'} · documents de l’espace chauffeur de cet appareil
           </T>
-          {DRIVER_DOCS.map((d) => {
-            const st = s.driver.docs[d.id];
+          <T v="small" muted>
+            {docReport(s).blockers.length ? `Blocage mise en ligne : ${docReport(s).blockers.map((b) => b.label).join(', ')}` : 'Aucun document obligatoire en blocage.'}
+            {docReport(s).warnings.length ? ` Rappels 30 j : ${docReport(s).warnings.map((b) => b.label).join(', ')}.` : ''}
+          </T>
+          {ALL_DOCS.map((d) => {
+            const st = s.driver.docs[d.id] ?? 'missing';
+            const exp = s.driver.docExpiry?.[d.id];
             return (
               <ListItem
                 key={d.id}
                 title={d.label}
-                sub={st === 'missing' ? 'Manquant' : st === 'uploaded_placeholder' ? 'À vérifier' : 'Validé (démo)'}
+                sub={`${st === 'missing' ? 'Manquant' : st === 'uploaded_placeholder' ? 'À vérifier' : 'Validé (démo)'}${exp ? ' · échéance ' + fmtDate(exp + 'T12:00:00') : ''}${d.required ? '' : ' · facultatif'}`}
                 icon="document-text"
                 iconColor={st === 'validated_demo' ? t.success : st === 'missing' ? t.warning : t.info}
                 right={
                   st === 'uploaded_placeholder' ? (
-                    <Button small title="Valider" kind="success" onPress={() => store.set((x) => ({ ...x, driver: { ...x.driver, docs: { ...x.driver.docs, [d.id]: 'validated_demo' } } }))} />
+                    <Button
+                      small
+                      title="Valider"
+                      kind="success"
+                      onPress={() => {
+                        store.set((x) => ({
+                          ...x,
+                          driver: { ...x.driver, docs: { ...x.driver.docs, [d.id]: 'validated_demo' } },
+                          journal: [...x.journal, { id: `evt_${Date.now().toString(36)}`, at: Date.now(), kind: 'doc', label: `Document validé (démo) : ${d.label}` }],
+                        }));
+                      }}
+                    />
                   ) : undefined
                 }
               />
@@ -163,7 +199,7 @@ export default function Admin() {
             <ToggleRow
               key={c.id}
               label={`${c.name} (${c.country})`}
-              sub={c.id === 'geneve' ? 'Ville de lancement — active' : 'Pack local non préparé : la réservation affichera « bientôt »'}
+              sub={c.id === 'geneve' ? 'Ville active' : `Flag ${c.id === 'paris' ? 'CITY_PARIS' : 'CITY_CASABLANCA'}=${cityOpen(c.id, true) ? 'true' : 'false'}. Cadre légal à étudier. Le client ne voit pas cette ville comme ouverte.`}
               value={s.cities[c.id]}
               disabled={c.id === 'geneve'}
               onChange={(v) => store.set((x) => ({ ...x, cities: { ...x.cities, [c.id]: v } }))}
@@ -204,9 +240,31 @@ export default function Admin() {
               ))}
             </Card>
           </Section>
+          <Section title="Hypothèse de rémunération">
+            <Card>
+              <Field
+                label="Part chauffeur (hypothèse de démo, %)"
+                value={String(Math.round(shareRate(s) * 100))}
+                onChangeText={(v) => {
+                  const n = Number(v.replace(',', '.'));
+                  if (!Number.isFinite(n)) return;
+                  const rate = Math.min(100, Math.max(1, n)) / 100;
+                  store.set((x) => ({ ...x, driverShareDemo: rate }));
+                }}
+                keyboardType="number-pad"
+                hint="Masquée au client. Ce n’est pas un partage contractuel. Modèle d’exploitation : YOUR_OPERATING_MODEL — à décider."
+              />
+              <T v="small" muted>
+                Valeur actuelle : {Math.round(shareRate(s) * 100)} % — hypothèse, non affichée comme réelle.
+              </T>
+            </Card>
+          </Section>
+          {staleExampleEnv ? (
+            <Banner kind="warning" title="Variable de test ignorée" text="EXPO_PUBLIC_EXAMPLE_EN est défini dans l’environnement. L’app ne l’utilise pas. Retirez-le." />
+          ) : null}
           <Section title="Expérimental">
             <Card>
-              <ToggleRow label="Dispatch IA (Phase 2)" sub="Attribution automatique optimisée. Désactivé : nécessite le backend et un modèle côté serveur." value={false} disabled onChange={() => {}} />
+              <ToggleRow label="Dispatch IA (Phase 3)" sub="Désactivé. Le flag FEATURE_AI_DISPATCH ne lance aucune attribution automatique." value={false} disabled onChange={() => {}} />
             </Card>
           </Section>
         </>

@@ -72,7 +72,10 @@ export default function Welcome() {
       </Card>
 
       <Card>
-        <T v="h3">Consentements (RGPD / nLPD)</T>
+        <T v="h3">Consentements — nLPD (Suisse)</T>
+        <T v="small" muted>
+          Le RGPD s’ajoute pour les clients de l’UE. Textes juridiques à valider.
+        </T>
         <Check required value={c.terms} onChange={(v) => setC({ ...c, terms: v })} label="J’accepte les conditions d’utilisation." />
         <Check required value={c.privacy} onChange={(v) => setC({ ...c, privacy: v })} label="J’ai lu la politique de confidentialité (traitement nécessaire à l’exécution du contrat)." />
         <Check value={c.location} onChange={(v) => setC({ ...c, location: v })} label="Autoriser la localisation GPS pour la prise en charge (facultatif, révocable)." />

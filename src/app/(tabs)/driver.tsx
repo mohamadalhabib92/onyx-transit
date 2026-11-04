@@ -9,6 +9,7 @@ import { parseIsoDate } from '@/lib/rules';
 import { advanceRide, ALL_DOCS, DRIVER_DOCS, newRide, onlineBlockers, placeRide, shareRate, STATUS_LABEL, store, VEHICLE_DOCS, type DocStatus, type Stop } from '@/state';
 import { backendReady } from '@/config';
 import { RouteMap } from '@/components/RouteMap';
+import { useFeedback } from '@/kit/motion';
 
 const DOC_LABEL: Record<DocStatus, string> = { missing: 'Manquant', uploaded_placeholder: 'Ajouté — en attente de validation', validated_demo: 'Validé (démo admin)' };
 const REASON: Record<string, string> = { missing: 'manquant', pending: 'en attente de validation', expired: 'expiré' };
@@ -20,6 +21,7 @@ function openNav(to: Stop) {
 export default function Driver() {
   const t = useTheme();
   const toast = useToast();
+  const { celebrate } = useFeedback();
   const s = store.use();
   const d = s.driver;
   const name = s.profile.name || 'Chauffeur Onyx';
@@ -159,7 +161,7 @@ export default function Driver() {
                   kind="success"
                   onPress={() => {
                     advanceRide(current.id, name);
-                    toast('Course terminée', 'success');
+                    celebrate({ title: 'Course terminée', subtitle: 'Merci pour ce trajet tout en douceur.', icon: 'checkmark-done', tone: 'gold' });
                   }}
                 />
               </>

@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePrefersReducedMotion } from './a11y';
+import { useReducedTransparency } from './access';
 import { useOnline } from './net';
 import type { HydrateResult } from './store';
 import { haptic } from './haptics';
@@ -70,6 +71,8 @@ export function T({
     <Text
       numberOfLines={numberOfLines}
       selectable={selectable}
+      // Dynamic Type : les gros titres plafonnent à ×1,6 pour ne pas casser les mots ; le texte courant suit librement.
+      maxFontSizeMultiplier={v === 'display' || v === 'h1' ? 1.6 : v === 'h2' ? 1.8 : undefined}
       style={[
         {
           fontSize: s.fs * t.fontScale,
@@ -129,7 +132,7 @@ export function Header({ title, subtitle, right, left }: { title: string; subtit
     <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       {left}
       <View style={{ flex: 1 }}>
-        <T v="h1" numberOfLines={1}>
+        <T v="h1" numberOfLines={2}>
           {title}
         </T>
         {subtitle ? (
@@ -275,9 +278,9 @@ export function Chip({ label, selected, onPress, color, icon }: { label: string;
       onPress={onPress}
       scaleTo={0.95}
       hapticKind="select"
-      hitSlop={4}
       style={{
-        minHeight: 36,
+        minHeight: 44,
+        maxWidth: '100%',
         paddingHorizontal: 12,
         borderRadius: 18,
         borderWidth: 1,
@@ -289,7 +292,7 @@ export function Chip({ label, selected, onPress, color, icon }: { label: string;
       }}
     >
       {icon ? <Ionicons name={icon} size={14} color={selected ? c : t.textMuted} /> : null}
-      <Text style={{ color: selected ? c : t.text, fontWeight: selected ? '700' : '500', fontSize: 13 * t.fontScale }}>{label}</Text>
+      <Text maxFontSizeMultiplier={1.6} style={{ color: selected ? c : t.text, fontWeight: selected ? '700' : '500', fontSize: 13 * t.fontScale, flexShrink: 1 }}>{label}</Text>
     </PressableScale>
   );
 }
@@ -300,7 +303,7 @@ export function Badge({ label, color, icon }: { label: string; color?: string; i
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: alpha(c, 0.15) }}>
       {icon ? <Ionicons name={icon} size={12} color={c} /> : null}
-      <Text style={{ color: c, fontSize: 11 * t.fontScale, fontWeight: '700' }}>{label}</Text>
+      <Text maxFontSizeMultiplier={1.6} style={{ color: c, fontSize: 11 * t.fontScale, fontWeight: '700' }}>{label}</Text>
     </View>
   );
 }
@@ -323,7 +326,8 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
             }}
             style={{
               flex: 1,
-              minHeight: 38,
+              minHeight: 44,
+              paddingHorizontal: 6,
               borderRadius: t.radius - 3,
               alignItems: 'center',
               justifyContent: 'center',
@@ -331,7 +335,7 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
               ...(on ? { shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 } : null),
             }}
           >
-            <Text style={{ color: on ? t.text : t.textMuted, fontWeight: on ? '700' : '500', fontSize: 13 * t.fontScale }}>{o.label}</Text>
+            <Text maxFontSizeMultiplier={1.6} numberOfLines={2} style={{ color: on ? t.text : t.textMuted, fontWeight: on ? '700' : '500', fontSize: 13 * t.fontScale, textAlign: 'center' }}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -420,7 +424,7 @@ export function ListItem({ title, sub, right, icon, iconColor, onPress }: { titl
         </View>
       ) : null}
       <View style={{ flex: 1 }}>
-        <T numberOfLines={1} style={{ fontWeight: '600' }}>
+        <T numberOfLines={2} style={{ fontWeight: '600' }}>
           {title}
         </T>
         {sub ? (
@@ -572,9 +576,10 @@ export function Stat({ label, value, sub, color, demo }: { label: string; value:
 export function Sheet({ visible, onClose, title, children }: { visible: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const solid = useReducedTransparency();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: t.overlay }} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: solid ? 'rgba(0,0,0,0.88)' : t.overlay }} />
       <View style={{ backgroundColor: t.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingBottom: insets.bottom + 12 }}>
         <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center' }}>
           <Row style={{ padding: 16, paddingBottom: 6, justifyContent: 'space-between' }}>

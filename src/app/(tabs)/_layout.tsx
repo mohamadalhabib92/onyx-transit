@@ -4,8 +4,12 @@ import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@/kit/ui';
 import { onyx } from '@/theme';
 import { store } from '@/state';
+import { useWindowDimensions } from 'react-native';
 
 export default function TabsLayout() {
+  // Libellés d'onglets : suivent la taille de texte du système jusqu'à ×1,4, au-delà la barre déborderait.
+  const { fontScale } = useWindowDimensions();
+  const tabFs = (n: number) => Math.round(n * Math.min(fontScale, 1.4));
   const signedIn = store.useSelect((s) => s.signedIn);
   if (!signedIn) return <Redirect href="/welcome" />;
   const icon = (name: React.ComponentProps<typeof Ionicons>['name']) =>
@@ -19,7 +23,8 @@ export default function TabsLayout() {
         tabBarActiveTintColor: onyx.primary,
         tabBarInactiveTintColor: onyx.textMuted,
         tabBarStyle: { backgroundColor: onyx.surface, borderTopColor: onyx.border, minHeight: 60 },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarAllowFontScaling: false,
+        tabBarLabelStyle: { fontSize: tabFs(11), fontWeight: '600' },
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Réserver', tabBarIcon: icon('navigate') }} />

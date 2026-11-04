@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Button, Card, Field, ListItem, Screen, Section, Segmented, T, useToast } from '@/kit/ui';
+import { Button, Card, Field, ListItem, Screen, Section, Segmented, T, ToggleRow, useToast } from '@/kit/ui';
+import { useVibrations } from '@/kit/access';
 import { useTheme } from '@/kit/theme';
 import { PAYMENT_LABEL, store, type Role } from '@/state';
 
@@ -10,6 +11,7 @@ export default function Account() {
   const toast = useToast();
   const s = store.use();
   const [p, setP] = useState(s.profile);
+  const [vibrations, setVibrations] = useVibrations();
   const dirty = JSON.stringify(p) !== JSON.stringify(s.profile);
   return (
     <Screen>
@@ -41,6 +43,9 @@ export default function Account() {
         <T v="small" muted>
           En démo locale, les trois espaces restent accessibles. En production, les droits sont attribués côté serveur.
         </T>
+      </Section>
+      <Section title="Confort">
+        <ToggleRow label="Vibrations" sub="Petits retours tactiles quand vous touchez un bouton." value={vibrations} onChange={setVibrations} />
       </Section>
       <Card>
         <ListItem icon="card" title="Paiement" sub={PAYMENT_LABEL[s.payment]} onPress={() => router.push('/payments')} />

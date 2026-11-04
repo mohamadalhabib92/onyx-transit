@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LostRideNotice } from '@/components/LostRideNotice';
 import { ErrorBoundary } from '@/kit/error-boundary';
 import { ThemeProvider } from '@/kit/theme';
+import { FeedbackProvider } from '@/kit/motion';
 import { BootGate, ToastProvider } from '@/kit/ui';
 import { onyx } from '@/theme';
 import { store } from '@/state';
@@ -23,6 +24,7 @@ export default function RootLayout() {
       <ThemeProvider value={onyx}>
         <ErrorBoundary>
           <ToastProvider>
+            <FeedbackProvider>
             <StatusBar style="light" />
             <BootGate hydrate={hydrate} recover={() => store.startFresh()} appName="Onyx Transit">
               <View style={{ flex: 1 }}>
@@ -33,6 +35,7 @@ export default function RootLayout() {
                 </View>
               </View>
             </BootGate>
+            </FeedbackProvider>
           </ToastProvider>
         </ErrorBoundary>
       </ThemeProvider>

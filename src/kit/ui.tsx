@@ -19,8 +19,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePrefersReducedMotion } from './a11y';
+import { useReducedTransparency } from './access';
 import { useOnline } from './net';
 import type { HydrateResult } from './store';
+import { haptic } from './haptics';
+import { FadeIn, PressableScale, springs } from './motion';
 import { alpha, useTheme } from './theme';
 
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -68,6 +71,8 @@ export function T({
     <Text
       numberOfLines={numberOfLines}
       selectable={selectable}
+      // Dynamic Type : les gros titres plafonnent à ×1,6 pour ne pas casser les mots ; le texte courant suit librement.
+      maxFontSizeMultiplier={v === 'display' || v === 'h1' ? 1.6 : v === 'h2' ? 1.8 : undefined}
       style={[
         {
           fontSize: s.fs * t.fontScale,
@@ -127,7 +132,7 @@ export function Header({ title, subtitle, right, left }: { title: string; subtit
     <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       {left}
       <View style={{ flex: 1 }}>
-        <T v="h1" numberOfLines={1}>
+        <T v="h1" numberOfLines={2}>
           {title}
         </T>
         {subtitle ? (
@@ -159,9 +164,9 @@ export function Card({ children, style, onPress, accent, a11y }: { children: Rea
   };
   if (onPress)
     return (
-      <Pressable accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} style={({ pressed }) => [base, { opacity: pressed ? 0.85 : 1 }, style]}>
+      <PressableScale accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} scaleTo={0.985} hapticKind="select" style={({ pressed }) => [base, { opacity: pressed ? 0.92 : 1 }, style]}>
         {children}
-      </Pressable>
+      </PressableScale>
     );
   return <View style={[base, style]}>{children}</View>;
 }
@@ -214,12 +219,13 @@ export function Button({
   const bg = { primary: t.primary, secondary: t.surface2, ghost: 'transparent', danger: t.danger, success: t.success }[kind];
   const fg = { primary: t.primaryText, secondary: t.text, ghost: t.primary, danger: t.primaryText, success: t.primaryText }[kind];
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={a11y ?? title}
-      accessibilityState={{ disabled: !!disabled }}
+      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       disabled={disabled || loading}
       onPress={onPress}
+      hapticKind={kind === 'danger' ? 'warning' : 'tap'}
       style={({ pressed }) => [
         {
           minHeight: small ? 44 : 48,
@@ -232,30 +238,32 @@ export function Button({
           justifyContent: 'center',
           flexDirection: 'row',
           gap: 8,
-          opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
+          opacity: disabled ? 0.45 : pressed ? 0.9 : 1,
           alignSelf: full ? 'stretch' : 'auto',
         },
         style,
       ]}
     >
       {loading ? <ActivityIndicator color={fg} /> : icon ? <Ionicons name={icon} size={small ? 16 : 18} color={fg} /> : null}
-      <Text style={{ color: fg, fontWeight: '700', fontSize: (small ? 13 : 15) * t.fontScale }}>{title}</Text>
-    </Pressable>
+      <Text style={{ color: fg, fontWeight: '700', fontSize: (small ? 13 : 15) * t.fontScale, letterSpacing: 0.2 }}>{title}</Text>
+    </PressableScale>
   );
 }
 
 export function IconButton({ icon, onPress, a11y, color, size = 22 }: { icon: IconName; onPress?: () => void; a11y: string; color?: string; size?: number }) {
   const t = useTheme();
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={a11y}
       onPress={onPress}
       hitSlop={6}
+      scaleTo={0.9}
+      hapticKind="select"
       style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' })}
     >
       <Ionicons name={icon} size={size} color={color ?? t.text} />
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -263,12 +271,16 @@ export function Chip({ label, selected, onPress, color, icon }: { label: string;
   const t = useTheme();
   const c = color ?? t.primary;
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ selected: !!selected }}
       onPress={onPress}
+      scaleTo={0.95}
+      hapticKind="select"
       style={{
-        minHeight: 36,
+        minHeight: 44,
+        maxWidth: '100%',
         paddingHorizontal: 12,
         borderRadius: 18,
         borderWidth: 1,
@@ -280,8 +292,8 @@ export function Chip({ label, selected, onPress, color, icon }: { label: string;
       }}
     >
       {icon ? <Ionicons name={icon} size={14} color={selected ? c : t.textMuted} /> : null}
-      <Text style={{ color: selected ? c : t.text, fontWeight: selected ? '700' : '500', fontSize: 13 * t.fontScale }}>{label}</Text>
-    </Pressable>
+      <Text maxFontSizeMultiplier={1.6} style={{ color: selected ? c : t.text, fontWeight: selected ? '700' : '500', fontSize: 13 * t.fontScale, flexShrink: 1 }}>{label}</Text>
+    </PressableScale>
   );
 }
 
@@ -291,7 +303,7 @@ export function Badge({ label, color, icon }: { label: string; color?: string; i
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: alpha(c, 0.15) }}>
       {icon ? <Ionicons name={icon} size={12} color={c} /> : null}
-      <Text style={{ color: c, fontSize: 11 * t.fontScale, fontWeight: '700' }}>{label}</Text>
+      <Text maxFontSizeMultiplier={1.6} style={{ color: c, fontSize: 11 * t.fontScale, fontWeight: '700' }}>{label}</Text>
     </View>
   );
 }
@@ -307,10 +319,23 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
             key={o.key}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            onPress={() => onChange(o.key)}
-            style={{ flex: 1, minHeight: 38, borderRadius: t.radius - 3, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? t.surface : 'transparent' }}
+            accessibilityLabel={o.label}
+            onPress={() => {
+              if (!on) haptic('select');
+              onChange(o.key);
+            }}
+            style={{
+              flex: 1,
+              minHeight: 44,
+              paddingHorizontal: 6,
+              borderRadius: t.radius - 3,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: on ? t.border : 'transparent',
+              ...(on ? { shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 } : null),
+            }}
           >
-            <Text style={{ color: on ? t.text : t.textMuted, fontWeight: on ? '700' : '500', fontSize: 13 * t.fontScale }}>{o.label}</Text>
+            <Text maxFontSizeMultiplier={1.6} numberOfLines={2} style={{ color: on ? t.text : t.textMuted, fontWeight: on ? '700' : '500', fontSize: 13 * t.fontScale, textAlign: 'center' }}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -321,6 +346,7 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
 /* ---------- Formulaires ---------- */
 export function Field({ label, hint, error, ...props }: TextInputProps & { label: string; hint?: string; error?: string }) {
   const t = useTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 5 }}>
       <T v="label" muted>
@@ -330,11 +356,20 @@ export function Field({ label, hint, error, ...props }: TextInputProps & { label
         placeholderTextColor={t.textMuted}
         accessibilityLabel={label}
         {...props}
+        onFocus={(e) => {
+          setFocused(true);
+          props.onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          props.onBlur?.(e);
+        }}
         style={[
           {
             minHeight: props.multiline ? 84 : 46,
             borderWidth: 1,
-            borderColor: error ? t.danger : t.border,
+            // Anneau de focus or champagne : on sait toujours où l'on écrit.
+            borderColor: error ? t.danger : focused ? t.primary : t.border,
             borderRadius: t.radius - 2,
             paddingHorizontal: 12,
             paddingVertical: 10,
@@ -371,7 +406,10 @@ export function ToggleRow({ label, sub, value, onChange, disabled }: { label: st
           </T>
         ) : null}
       </View>
-      <Switch accessibilityLabel={label} value={value} onValueChange={onChange} disabled={disabled} trackColor={{ true: t.primary, false: t.textMuted }} thumbColor={t.primaryText} />
+      <Switch accessibilityLabel={label} value={value} onValueChange={(v) => {
+          haptic('select');
+          onChange(v);
+        }} disabled={disabled} trackColor={{ true: t.primary, false: t.textMuted }} thumbColor={t.primaryText} />
     </Row>
   );
 }
@@ -386,7 +424,7 @@ export function ListItem({ title, sub, right, icon, iconColor, onPress }: { titl
         </View>
       ) : null}
       <View style={{ flex: 1 }}>
-        <T numberOfLines={1} style={{ fontWeight: '600' }}>
+        <T numberOfLines={2} style={{ fontWeight: '600' }}>
           {title}
         </T>
         {sub ? (
@@ -401,9 +439,9 @@ export function ListItem({ title, sub, right, icon, iconColor, onPress }: { titl
   );
   if (!onPress) return content;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+    <PressableScale accessibilityRole="button" accessibilityLabel={sub ? `${title}, ${sub}` : title} onPress={onPress} scaleTo={0.985} hapticKind="select" style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
       {content}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -444,9 +482,26 @@ export function OfflineBadge({ text = 'Hors ligne — données en cache' }: { te
 export function EmptyState({ icon = 'sparkles', title, text, action }: { icon?: IconName; title: string; text?: string; action?: React.ReactNode }) {
   const t = useTheme();
   return (
-    <View style={{ alignItems: 'center', padding: 28, gap: 8 }}>
-      <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: alpha(t.primary, 0.12), alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={icon} size={30} color={t.primary} />
+    <FadeIn style={{ alignItems: 'center', paddingVertical: 32, paddingHorizontal: 24, gap: 8 }}>
+      <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: alpha(t.primary, 0.08), alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+        <View
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: t.surface,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: alpha(t.primary, 0.4),
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: t.primary,
+            shadowOpacity: 0.25,
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: 6 },
+          }}
+        >
+          <Ionicons name={icon} size={28} color={t.primary} />
+        </View>
       </View>
       <T v="h3" center>
         {title}
@@ -456,8 +511,8 @@ export function EmptyState({ icon = 'sparkles', title, text, action }: { icon?: 
           {text}
         </T>
       ) : null}
-      {action}
-    </View>
+      {action ? <View style={{ marginTop: 8 }}>{action}</View> : null}
+    </FadeIn>
   );
 }
 
@@ -482,9 +537,16 @@ export function Skeleton({ height = 16, width = '100%', style }: { height?: numb
 export function Progress({ value, color, height = 8 }: { value: number; color?: string; height?: number }) {
   const t = useTheme();
   const v = Math.max(0, Math.min(1, value));
+  const reduce = usePrefersReducedMotion();
+  const w = useRef(new Animated.Value(v)).current;
+  useEffect(() => {
+    // Largeur animée en ressort (pas de pilote natif pour une largeur en %).
+    if (reduce) w.setValue(v);
+    else Animated.spring(w, { toValue: v, ...springs.gentle, useNativeDriver: false }).start();
+  }, [v, reduce, w]);
   return (
     <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(v * 100) }} style={{ height, borderRadius: height / 2, backgroundColor: t.surface2, overflow: 'hidden' }}>
-      <View style={{ width: `${v * 100}%`, height: '100%', backgroundColor: color ?? t.primary, borderRadius: height / 2 }} />
+      <Animated.View style={{ width: w.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), height: '100%', backgroundColor: color ?? t.primary, borderRadius: height / 2 }} />
     </View>
   );
 }
@@ -514,9 +576,10 @@ export function Stat({ label, value, sub, color, demo }: { label: string; value:
 export function Sheet({ visible, onClose, title, children }: { visible: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const solid = useReducedTransparency();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: t.overlay }} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: solid ? 'rgba(0,0,0,0.88)' : t.overlay }} />
       <View style={{ backgroundColor: t.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingBottom: insets.bottom + 12 }}>
         <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center' }}>
           <Row style={{ padding: 16, paddingBottom: 6, justifyContent: 'space-between' }}>
@@ -543,6 +606,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
   const push = useCallback((text: string, kind: Toast['kind'] = 'info') => {
     const id = Date.now() + Math.random();
+    if (kind !== 'info') haptic(kind === 'error' ? 'error' : 'success');
     setToasts((x) => [...x, { id, text, kind }]);
     setTimeout(() => setToasts((x) => x.filter((y) => y.id !== id)), 3200);
   }, []);
@@ -551,8 +615,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + 72, alignItems: 'center', gap: 8 }}>
         {toasts.map((x) => (
+          <FadeIn key={x.id} distance={16}>
           <View
-            key={x.id}
             accessibilityLiveRegion="polite"
             style={{
               maxWidth: 520,
@@ -569,6 +633,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <Ionicons name={x.kind === 'error' ? 'alert-circle' : x.kind === 'success' ? 'checkmark-circle' : 'information-circle'} size={18} color={t.primaryText} />
             <Text style={{ color: t.primaryText, fontWeight: '600' }}>{x.text}</Text>
           </View>
+          </FadeIn>
         ))}
       </View>
     </ToastCtx.Provider>

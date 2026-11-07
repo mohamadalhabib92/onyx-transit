@@ -6,7 +6,8 @@ Commits cités :
 
 - Base auditée, lue avant le correctif : `550bf6754d821122f4d51aa2ce53abdfe457231e` (main, après les PR 1 et 2).
 - Correctif de préservation : `63bbbfb14de6fb6d1fbe02beacc661dead7e6cda` sur `cursor/preservation-fondation-fde0`.
-- Les numéros de ligne « avant » sont ceux lus sur `550bf67`. Les numéros « après » sont ceux de `63bbbfb`.
+- Suivi, texte de conservation des coordonnées : `35860af64d6375015d0516b6df6460bd231745b9` (même branche, même pull request).
+- Les numéros de ligne « avant » sont ceux lus sur `550bf67`. Les numéros de préservation sont ceux de `63bbbfb`. Le suivi ne change pas `reviveAppState`.
 
 Description reçue de l’utilisateur : VTC à Lausanne. Le dépôt, lui, parle de chauffeur privé à Genève. Rien dans le code ne prouve une autorisation cantonale, une flotte, ni un service de courses réel.
 
@@ -16,13 +17,19 @@ Description reçue de l’utilisateur : VTC à Lausanne. Le dépôt, lui, parle 
 2. Le plus grand risque de perte était une reprise trop arrangeante : un objet JSON de forme future ou étrangère devenait un état vide, puis la prochaine écriture, déconnexion comprise, remplaçait la clé.
 3. Le JSON cassé, `null`, un nombre ou un tableau étaient déjà copiés sans écrasement (PR 1) ; un objet « lisible » mais incompatible ne l’était pas.
 4. Le commit `63bbbfb` refuse cette réécriture, montre l’état incompatible, et n’efface la clé active qu’après copie brute, empreinte SHA-256 et restauration isolée ; il ne recolle jamais cette copie sur la clé active.
-5. `npm test` donne 17/17 en mémoire ; ce n’est pas un iPhone, pas un iPad, pas un navigateur réel, et il n’existe aucune preuve Supabase.
+5. `npm test` donne 20/20 en mémoire, dont les 17 tests du correctif de préservation, toujours verts. Ce n’est pas un iPhone, pas un iPad, pas un navigateur réel, et il n’existe aucune preuve Supabase.
 
 ## Ce qui a été fait, et rien d’autre
 
 Un seul correctif, borné à la conservation du document local. Pas de réécriture Swift, pas de flotte, pas de fusion, pas de push sur `main`, pas de build EAS, pas de store, pas de déploiement, pas d’appel réseau de production, pas de migration de schéma, pas de service payant, pas de messagerie, pas de réservation réelle, pas de paiement, pas de suivi de position continu.
 
 La clé reste `onyx-transit@v1` (`src/state.ts`, ligne 302). Les champs inconnus d’un document compatible restent dans l’objet et repartent à l’écriture. Une clé connue dont le type empêcherait de réécrire sans jeter des données bloque tout l’enregistrement.
+
+## Suivi : coordonnées et texte
+
+`35860af` ne réécrit aucune course. Il change les phrases qui disaient que la position n’était pas gardée après la course. La phrase tenue par le test est : « Les coordonnées de départ et d’arrivée restent dans l’historique local de la course, sur cet appareil, jusqu’à la suppression de ces données. Cette version ne les envoie à aucun serveur de l’application. »
+
+Vérifié dans le code des écrans : le seul `fetch(` est le rapport de crash Sentry, désactivé avec le placeholder, et il ne contient pas les courses. Aucun client Supabase. Le forçage `geneve: true` (`src/state.ts` ligne 236) n’est pas modifié. Ce n’est pas une approbation de transport ni une validation juridique. Le bandeau « Texte à valider » reste.
 
 ## Tableau
 
@@ -35,8 +42,8 @@ La clé reste `onyx-transit@v1` (`src/state.ts`, ligne 302). Les champs inconnus
 | Suppression | `reset` (`store.ts` 211-220 sur `550bf67`) faisait `removeItem` sans copie. | `reset` (`store.ts` 367-390) copie, relit, compare, restaure dans une clé `…restore-isolated`, l’efface, puis seulement alors retire la clé active. L’écran l’explique (`privacy.tsx` 89-106). | La suppression volontaire laisse une copie locale prouvée. Si la copie échoue, la clé active reste. | 3, fait | P0 |
 | Échec d’écriture | L’erreur de `setItem` était avalée (`store.ts` 97-99 sur `550bf67`). L’écran montrait un succès. | `writeHealth` (`store.ts` 199-204) et le bandeau dans `LostRideNotice.tsx` 17-22. | L’utilisateur voit que l’écriture n’est pas confirmée. Les octets précédents restent si `setItem` a rejeté. | 2, fait | P0 |
 | JSON illisible | Déjà traité en PR 1 : copie `.corrupt-…`, pas d’écrasement. | Conservé, et la copie passe maintenant par la même preuve isolée (`writeVerifiedCopy`, `store.ts` 134-142). | Un brut cassé n’est toujours pas remplacé. La preuve est plus stricte. | 1, renfort | P0, déjà couvert |
-| `geneve: true` forcé | `reviveAppState` ligne 236 écrit encore `geneve: true` dans les villes stockées. | Non modifié : le changer ici aurait modifié un choix produit hors du trou de perte principal. | Une valeur stockée `false` pour Genève peut être réécrite à la prochaine sauvegarde réussie. | 1, pas fait | P2 |
-| Coordonnées dans l’historique | Le texte (`privacy.tsx` 10, déjà avant ce correctif) dit que la position n’est pas gardée après la course. Le lieu choisi, GPS compris, reste dans `pickup` / `dropoff` de la course (`PlacePicker.tsx` 41, `state.ts` type `Stop`). `EXPO_PUBLIC_LOCATION_RETENTION_DAYS` est affiché (`config.ts` 25 et 51) et ne supprime rien. | Ne pas effacer ces champs dans ce correctif : les effacer serait une perte. Décision de produit à part. | Les adresses et coordonnées d’une course déjà enregistrée restent. Le texte et le code ne disent pas la même chose. | 2, pas fait | P1 |
+| `geneve: true` forcé | `reviveAppState` ligne 236 écrit encore `geneve: true` dans les villes stockées. | Reporté. Le suivi `35860af` ne le change pas : pas de réécriture des villes dans le même passage que le texte de confidentialité. | Une valeur stockée `false` pour Genève peut être réécrite à la prochaine sauvegarde réussie. Reste au backlog. | 1, pas fait | P2, backlog |
+| Coordonnées dans l’historique | Le texte disait « le temps de la course uniquement ; non conservée ensuite » (`privacy.tsx`, ancienne ligne 10). Le lieu choisi, GPS ou liste, reste dans `pickup` / `dropoff` (`PlacePicker.tsx` 41, type `Stop`). | `35860af` remplace cette phrase par la conservation réelle (`src/lib/location-copy.ts`, écran, `public/privacy/index.html`, brouillon `store/ios-metadata.md`). Aucune coordonnée n’est effacée. `EXPO_PUBLIC_LOCATION_RETENTION_DAYS` reste un texte affiché (`config.ts` 25 et 51) et ne supprime toujours rien. | Le texte et l’historique disent la même chose : les coordonnées restent sur l’appareil jusqu’à une suppression voulue. Aucun serveur de courses n’est appelé. | 2, fait dans `35860af` | P1, fait |
 | Stockage en clair | AsyncStorage / `localStorage`, pas de chiffrement. La fiche iOS dit `ITSAppUsesNonExemptEncryption = false` (`store/ios-metadata.md` 22). | Hors de ce correctif. Un chiffrement serait une migration : interdite ici tant qu’elle n’a pas sa propre copie et son propre plan de retour. | Quiconque ouvre le stockage de l’app lit le JSON. | 4, pas fait | P1 |
 | Texte « service » | Accueil : « Chauffeur privé premium à Genève » (`welcome.tsx` 55). Brouillon store : « le chauffeur privé premium à Genève » (`store/ios-metadata.md` 31), marqué non soumis. Liste de lieux : Genève seulement (`src/data/places.ts`). Carte pro : « VTC (Genève) » (`state.ts` 88). Aucune ligne Lausanne. | Ne pas réécrire le produit dans ce correctif. Aligner les phrases sur « prototype local » avant toute publication. | Un lecteur peut croire à un service autorisé. Le code ne le démontre pas. | 2, pas fait | P1 |
 | Dispatch et courses | Le simulateur avance les courses `simulated` (`src/lib/simulator.ts` 10-28). Le dispatch manuel est local (`assignRideManually` dans `state.ts`). L’admin peut marquer un document `validated_demo`. | Déjà étiqueté simulation dans plusieurs écrans. Pas de nouveau dispatch. Ne pas présenter ces courses comme des courses réelles. | Aucun chauffeur distant n’est appelé. | 2, pas fait (texte) | P1 |
@@ -50,7 +57,7 @@ La clé reste `onyx-transit@v1` (`src/state.ts`, ligne 302). Les champs inconnus
 
 1. Faire relire `63bbbfb` et ne le merger qu’avec l’accord de Mohamed, après résolution des chevauchements avec la PR 3. Ne pas pusher `main` pour « voir ».
 2. Réécrire les phrases publiques (accueil, brouillon App Store, page confidentialité statique) pour qu’elles disent « prototype sur l’appareil », sans Genève ni Lausanne comme service ouvert, tant qu’une autorisation n’est pas dans le dossier.
-3. Décider, par écrit, si les coordonnées d’une course restent dans l’historique. Aujourd’hui elles y restent. Le texte qui dit le contraire doit changer, ou une future suppression doit être une action explicite, copiée avant, jamais un nettoyage silencieux à l’ouverture.
+3. Laisser `geneve: true` au backlog (`src/state.ts` ligne 236). Ne pas le corriger dans un passage qui touche au texte de confidentialité. Une future modification devra préserver une valeur `false` déjà stockée, avec les mêmes preuves de copie que la préservation.
 4. Prévoir le chiffrement au repos comme une migration séparée : copie brute, hash, essai sur une clé isolée, retour arrière, et seulement ensuite la bascule. Pas dans la foulée de ce correctif.
 5. Écrire le plan de bascule de schéma (v1 vers une v2) : qui décide, quels comptes de courses et d’identifiants doivent coïncider, quel hash annule l’opération. `proveSnapshot` ne fait pas cette bascule.
 
@@ -58,7 +65,7 @@ La clé reste `onyx-transit@v1` (`src/state.ts`, ligne 302). Les champs inconnus
 
 1. **Texte produit, sans toucher au stockage.** Partir de `main` plus le correctif de préservation s’il est mergé. Remplacer uniquement les phrases qui promettent un chauffeur, un règlement ou une ville ouverte : `src/app/welcome.tsx` ligne 55, `store/ios-metadata.md` lignes 25-40, et le titre du README. Écrire « prototype local, aucune course réelle, aucune autorisation affichée ». Ne pas ajouter Lausanne comme ville desservie. Ne pas modifier `reviveAppState`, `store.ts`, ni la clé. Tests : les 17 tests existants restent verts ; ajouter un test de fichier qui échoue si `welcome.tsx` contient « premium à Genève ». Pas de build, pas de store.
 
-2. **Coordonnées et phrase de conservation.** Lire `src/app/privacy.tsx` (tableau des durées) et `public/privacy/index.html` section 2. Les mettre d’accord avec le fait que `pickup` et `dropoff` gardent `lat` et `lon`. Ne pas supprimer ces nombres des courses déjà enregistrées. Si une durée doit un jour s’appliquer, elle ne s’applique qu’à une copie nouvelle, après export brut et hash identique à l’original. `EXPO_PUBLIC_LOCATION_RETENTION_DAYS` reste un texte tant qu’il vaut `YOUR_LOCATION_RETENTION_DAYS`. Test : une course ancienne avec `lat`/`lon` a les mêmes nombres après hydratation.
+2. **Coordonnées : fait dans `35860af`.** La phrase unique est `LOCAL_COORDINATE_RETENTION`. Elle est affichée dans le tableau et le résumé, et recopiée dans la page statique et le brouillon store. Le test `scripts/location-retention.test.ts` échoue si le texte redevient « non conservée ensuite », ou si `46.519653` / `6.632273` changent après reprise et déconnexion. Ne pas effacer ces nombres pour faire coller un ancien texte. `EXPO_PUBLIC_LOCATION_RETENTION_DAYS` reste un libellé tant qu’il vaut `YOUR_LOCATION_RETENTION_DAYS`.
 
 3. **Ralentir le simulateur sans perdre le journal.** Dans `src/lib/simulator.ts`, ne plus écrire la progression à chaque pas de 700 ms. Écrire au plus un changement d’état (acceptée, arrivée, démarrée, terminée). Les entrées de `journal` déjà présentes gardent leur `id` et leur `label`. Test : après une avance simulée, le nombre d’écritures `setItem` de la clé vive est borné, et `evt_historique_1` est inchangé. Pas de nouveau suivi GPS.
 
@@ -70,7 +77,7 @@ La clé reste `onyx-transit@v1` (`src/state.ts`, ligne 302). Les champs inconnus
 
 Ces chiffres viennent des tests lancés dans cette session. Ce ne sont pas des indicateurs d’usage, et il n’y a pas de « taux de perte » antérieur à citer.
 
-- `npm test` : 17 tests, 17 réussites, 0 échec, Node v22.23.4, durée environ 2,4 s. Commande : `node --experimental-strip-types --import ./scripts/register-alias.mjs --test scripts/store-persist.test.ts scripts/preserve-state.test.ts scripts/app-config.test.ts`.
+- `npm test` : 20 tests, 20 réussites, 0 échec, Node v22.23.4, durée environ 2,5 s. Les 17 tests de préservation sont toujours là. Trois tests s’y ajoutent (texte, coordonnées `46.519653` / `6.632273` et `46.5074` / `6.628`, absence d’envoi des courses). Commande : `node --experimental-strip-types --import ./scripts/register-alias.mjs --test scripts/store-persist.test.ts scripts/preserve-state.test.ts scripts/location-retention.test.ts scripts/app-config.test.ts`.
 - `npm run typecheck` : `tsc --noEmit` puis `tsc --noEmit -p tsconfig.scripts.json`, code de sortie 0.
 - `npm run check` : « Passe 1 checks OK (11 contrastes, dispatch, documents, identifiants). »
 - Document ancien de test : identifiants `ride_lausanne_1` et `ride_demo_2` tous les deux présents après déconnexion ; `quai` « 4 » ; `customerRef` `cli-9` ; facture `inv-1` ; note ; import `imp-1` ; client `c-9` ; journal `evt_historique_1` avec `source` `import` ; plaque `VD 1`.
@@ -118,11 +125,11 @@ Performance et batterie : non mesurées. Le point de code le plus bruyant est le
 
 ### 6. Sécurité, nLPD, RGPD, localisation, conservation
 
-Observé : données sur l’appareil seulement, tant que personne n’ajoute un backend. Rôle client, chauffeur et admin basculable dans le même stockage (`account.tsx` 31-39) : ce n’est pas un contrôle d’accès. Pas de clé secrète Stripe ni de clé de cartes dans les fichiers lus ; les exemples sont des `YOUR_…` (`.env.example`). Sentry ne part pas si le DSN est le placeholder (`src/kit/crash.ts` 4-5). Localisation : permission « pendant l’utilisation », précision `Balanced`, arrière-plan iOS et Android désactivés (`app.json` 91-100, `PlacePicker.tsx` 35-38). Pas d’historique de trace séparé : une position choisie devient le point de départ de la course et y reste.
+Observé : données sur l’appareil seulement, tant que personne n’ajoute un backend. Rôle client, chauffeur et admin basculable dans le même stockage (`account.tsx` 31-39) : ce n’est pas un contrôle d’accès. Pas de clé secrète Stripe ni de clé de cartes dans les fichiers lus ; les exemples sont des `YOUR_…` (`.env.example`). Le seul `fetch(` sous `src/` est `src/kit/crash.ts`, et seulement si le DSN Sentry est une URL réelle ; le corps ne contient ni course ni coordonnée. Aucun `createClient` Supabase. Sentry ne part pas si le DSN est le placeholder (`src/kit/crash.ts` 4-5). Localisation : permission « pendant l’utilisation », précision `Balanced`, arrière-plan iOS et Android désactivés (`app.json` 91-100, `PlacePicker.tsx` 35-38). Pas d’historique de trace séparé : une position choisie, ou un lieu de la liste, devient le point de la course et y reste, latitude et longitude comprises. Le bouton Naviguer peut ouvrir Google Maps si la personne le demande (`public/privacy/index.html`, section 4) : ce n’est pas un serveur de l’application.
 
 Textes légaux dans l’app : ils se disent « à valider » (`welcome.tsx` 77, `privacy.tsx` 28). La page statique `public/privacy/index.html` dit que l’éditeur ne collecte pas de données sur ses serveurs, et décrit le stockage local. Utile, pas suffisant comme registre nLPD.
 
-Conservation affichée (`privacy.tsx` 8-13, inchangé dans l’esprit) : compte et pièces 10 ans, GPS « le temps de la course », avis 3 ans, marketing jusqu’au retrait, documents chauffeur « durée de l’activité + délai légal ». Ces durées sont des phrases d’interface. Ce correctif ne les applique pas par un effacement automatique, et ne certifie pas qu’elles sont les bonnes.
+Conservation affichée après `35860af` : les coordonnées de départ et d’arrivée restent dans l’historique local jusqu’à la suppression de ces données, et cette version ne les envoie à aucun serveur de l’application (`src/lib/location-copy.ts`). Les autres durées (pièces, avis, marketing, documents) restent des phrases d’interface, avec le bandeau « Texte à valider ». Elles ne sont pas appliquées par un effacement automatique. Ce texte n’est pas une décision juridique ni une autorisation de transport. L’écran le dit.
 
 ### 7. Linguistique
 
@@ -200,7 +207,18 @@ Fichiers du commit `63bbbfb` :
 - `src/components/LostRideNotice.tsx` — bandeau si l’écriture est refusée.
 - `scripts/preserve-state.test.ts`, `scripts/store-persist.test.ts`, `scripts/register-alias.mjs`, `scripts/alias-hook.mjs`, `package.json` (script `test`).
 
-Ce que les tests couvrent : ancien document compatible ; champs inconnus ; course de test conservée à côté d’une course ordinaire ; forme future ; forme étrangère ; identifiant non textuel ; prix maximum non numérique ; écriture refusée ; déconnexion ; profil ; connexion ; copie de suppression ; `proveSnapshot` qui ne recrée pas la clé vive ; JSON cassé ; `null` ; `42` ; `[1]` ; lecture en échec ; course saisie pendant la lecture.
+Fichiers du suivi `35860af` :
+
+- `src/lib/location-copy.ts` — phrase unique de conservation.
+- `src/app/privacy.tsx` — tableau et résumé. Les coordonnées ne sont pas lues pour être effacées.
+- `public/privacy/index.html` — même phrase, page statique.
+- `store/ios-metadata.md` — le brouillon répète la même phrase. Le reste du brouillon, qui parle encore d’un service genevois, n’est pas une publication et n’a pas été réécrit ici.
+- `scripts/location-retention.test.ts` — régression de texte, de coordonnées, et d’absence d’envoi.
+- `package.json` — le script `test` lance aussi ce fichier.
+
+`src/state.ts` n’est pas dans ce suivi. `geneve: true` reste à la ligne 236.
+
+Ce que les tests couvrent : ancien document compatible ; champs inconnus ; course de test conservée à côté d’une course ordinaire ; forme future ; forme étrangère ; identifiant non textuel ; prix maximum non numérique ; écriture refusée ; déconnexion ; profil ; connexion ; copie de suppression ; `proveSnapshot` qui ne recrée pas la clé vive ; JSON cassé ; `null` ; `42` ; `[1]` ; lecture en échec ; course saisie pendant la lecture ; phrase de conservation identique dans l’écran, la page et le brouillon ; latitude `46.519653` et longitude `6.632273` inchangées après déconnexion ; seul `fetch(` de `src/` dans `crash.ts`, sans course.
 
 Ce que les tests ne couvrent pas : AsyncStorage réel, `localStorage` d’un navigateur, processus tué au milieu d’un `setItem`, disque plein, sauvegarde iCloud, désinstallation, ni la PR 3 compilée avec ce diff.
 
@@ -212,7 +230,8 @@ Limites explicites :
 - `crypto.subtle` est requis pour déclarer une empreinte (`store.ts`, `sha256Text`). Sous Node v22.23.4 il est là. S’il manque, la copie n’est pas déclarée vérifiée et la suppression ou le remplacement n’avancent pas.
 - `startFresh` peut encore remplacer la clé active par un profil vide, uniquement après confirmation et preuve. Ce n’est pas un retour arrière : rien ne remet la copie sur la clé active.
 - Une prochaine version qui voudra lire un schéma différent devra refuser la bascule tant que les comptes (nombre de courses, identifiants) et le hash ne correspondent pas à la copie. Ce code ne fait pas cette bascule.
-- `geneve: true` forcé et les coordonnées gardées dans les courses sont des restes connus, cités dans le tableau.
+- `geneve: true` forcé reste au backlog (`src/state.ts` ligne 236). Le suivi des coordonnées ne le modifie pas.
+- Les coordonnées des courses déjà enregistrées ne sont pas réécrites pour coller à un ancien texte. Le texte a été changé pour coller aux coordonnées qui restent.
 - Aucune donnée de production n’a été lue. Les jeux de tests sont des objets construits dans `scripts/preserve-state.test.ts`.
 
 ## Autres pull requests
@@ -238,6 +257,6 @@ npm run typecheck
 npm run check
 ```
 
-Résultats de la dernière passe : tests 17/17 ; typecheck code 0 ; check « Passe 1 checks OK (11 contrastes, dispatch, documents, identifiants). »
+Résultats de la dernière passe, après `35860af` : tests 20/20 (les 17 de préservation plus 3 sur le texte, les coordonnées et l’absence d’envoi) ; typecheck code 0 ; check « Passe 1 checks OK (11 contrastes, dispatch, documents, identifiants). »
 
 Non lancés, volontairement : `npm run build:web`, `npx expo start`, EAS, déploiement Pages, tout appel Supabase, Stripe, Sentry ou cartes.

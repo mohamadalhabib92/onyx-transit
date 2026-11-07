@@ -34,7 +34,7 @@
     "build:web": "expo export -p web && node scripts/pwa.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "check": "node --experimental-strip-types scripts/check-passe1.ts",
-    "test": "node --experimental-strip-types --import ./scripts/register-alias.mjs --test scripts/store-persist.test.ts scripts/preserve-state.test.ts scripts/app-config.test.ts",
+    "test": "node --experimental-strip-types --import ./scripts/register-alias.mjs --test scripts/store-persist.test.ts scripts/preserve-state.test.ts scripts/location-retention.test.ts scripts/app-config.test.ts",
     "serve:web": "node scripts/serve.mjs"
   },
   "private": true

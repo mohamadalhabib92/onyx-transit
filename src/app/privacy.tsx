@@ -3,11 +3,12 @@ import { useRouter } from 'expo-router';
 import { Banner, Button, Card, IconButton, Row, Screen, Section, Sheet, T, ToggleRow, useToast } from '@/kit/ui';
 import { exportText } from '@/kit/files';
 import { fmtDateTime } from '@/kit/format';
+import { LOCAL_COORDINATE_RETENTION } from '@/lib/location-copy';
 import { store } from '@/state';
 
 const BASES = [
   ['Compte et courses', 'Exécution du contrat', 'Durée du compte + 10 ans pour les pièces comptables (reçus)'],
-  ['Position GPS', 'Consentement (révocable)', 'Le temps de la course uniquement ; non conservée ensuite'],
+  ['Lieux et coordonnées des courses', 'Enregistrement sur cet appareil', LOCAL_COORDINATE_RETENTION],
   ['Évaluations & réclamations', 'Intérêt légitime (qualité de service)', '3 ans'],
   ['Offres commerciales', 'Consentement (révocable)', 'Jusqu’au retrait du consentement'],
   ['Documents chauffeur', 'Obligation légale (transport professionnel de personnes)', 'Durée de l’activité + délai légal'],
@@ -52,7 +53,7 @@ export default function Privacy() {
       <Section title="Politique de confidentialité (résumé)">
         <Card>
           <T v="small">
-            Nous traitons vos données uniquement pour organiser vos courses, les facturer, assurer la sécurité et répondre à vos demandes. Elles ne sont jamais vendues. Dans cette version, toutes les données restent sur votre appareil. Lorsque le service en ligne sera activé, l’hébergement, les sous-traitants (paiement, cartographie) et les transferts hors de Suisse/UE seront listés ici. Contact délégué à la protection des données : YOUR_DPO_EMAIL.
+            Nous traitons vos données uniquement pour organiser vos courses, les facturer, assurer la sécurité et répondre à vos demandes. Elles ne sont jamais vendues. Dans cette version, toutes les données restent sur votre appareil. {LOCAL_COORDINATE_RETENTION} La lecture GPS, si vous l’autorisez, sert seulement à proposer un départ ; elle n’est pas un suivi continu. Aucun compte en ligne n’est connecté. Ce texte décrit ce comportement. Il n’est pas une décision juridique ni une autorisation de transport. Contact délégué à la protection des données : YOUR_DPO_EMAIL.
           </T>
         </Card>
       </Section>

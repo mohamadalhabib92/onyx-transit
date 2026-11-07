@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Banner, Button, Card, Field, Ionicons, Row, Screen, T } from '@/kit/ui';
 import { alpha, useTheme } from '@/kit/theme';
-import { store } from '@/state';
+import { applySignIn, store } from '@/state';
 import { backendReady } from '@/config';
 
 function Check({ value, onChange, label, required }: { value: boolean; onChange: (v: boolean) => void; label: string; required?: boolean }) {
@@ -38,7 +38,7 @@ export default function Welcome() {
   const canGo = name.trim().length >= 2 && emailOk && c.terms && c.privacy;
 
   const submit = () => {
-    store.set((s) => ({ ...s, signedIn: true, profile: { ...s.profile, name: name.trim(), email: email.trim(), phone: phone.trim() }, consents: { ...c, at: Date.now() } }));
+    store.set((s) => applySignIn(s, { name, email, phone, ...c }));
     router.replace('/(tabs)');
   };
 

@@ -117,11 +117,14 @@ test('un JSON illisible est copié sans écraser l’original, puis le départ �
   assert.match(result.backupKey, /^box@v1\.corrupt-\d{4}-\d{2}-\d{2}$/);
   assert.equal(mem.data.get('box@v1'), raw);
   assert.equal(mem.data.get(result.backupKey), raw);
-  assert.deepEqual(mem.keys, [result.backupKey]);
+  assert.equal(mem.data.has(`${result.backupKey}.restore-isolated`), false);
+  assert.equal(result.proof.sha256.length, 64);
+  assert.equal(result.proof.bytes, raw.length);
+  assert.equal(mem.keys.includes('box@v1'), false);
   store.set({ name: 'nouveau' });
   await wait(200);
   assert.equal(mem.data.get('box@v1'), raw);
-  assert.deepEqual(mem.keys, [result.backupKey]);
+  assert.equal(mem.keys.includes('box@v1'), false);
   await store.startFresh();
   assert.equal(mem.data.get(result.backupKey), raw);
   assert.deepEqual(JSON.parse(mem.data.get('box@v1')!), { name: '' });
@@ -244,9 +247,13 @@ test('reset avant la lecture ne supprime qu’une fois la lecture réussie, sans
   assert.equal(mem.data.has('box@v1'), true);
   mem.release();
   await reading;
-  assert.equal(mem.writes, 0);
-  assert.equal(mem.removes, 1);
+  assert.equal(mem.writes, 2);
+  assert.equal(mem.removes, 2);
   assert.equal(mem.data.has('box@v1'), false);
+  const deleted = [...mem.data.keys()].filter((k) => k.startsWith('box@v1.deleted-'));
+  assert.equal(deleted.length, 1);
+  assert.equal(mem.data.get(deleted[0]!), JSON.stringify({ name: 'Ada', rides: ['course-1'] }));
+  assert.equal([...mem.data.keys()].some((k) => k.includes('restore-isolated')), false);
 });
 
 test('reset après une lecture réussie efface la clé', async () => {
@@ -254,9 +261,19 @@ test('reset après une lecture réussie efface la clé', async () => {
   mem.data.set('box@v1', JSON.stringify({ name: 'Ada' }));
   const store = createPersistedStore('box', () => ({ name: '' }), 1, undefined, mem.storage);
   await store.hydrate();
-  await store.reset();
-  assert.equal(mem.removes, 1);
-  assert.equal(mem.writes, 0);
+  const result = await store.reset();
+  assert.equal(result.deferred, false);
+  assert.equal(mem.removes, 2);
+  assert.equal(mem.writes, 2);
   assert.equal(mem.data.has('box@v1'), false);
+  assert.ok(result.proof);
+  assert.equal(mem.data.get(result.proof.backupKey), JSON.stringify({ name: 'Ada' }));
+  assert.equal(result.proof.sha256.length, 64);
+  assert.equal(mem.data.has(`${result.proof.backupKey}.restore-isolated`), false);
   assert.deepEqual(store.get(), { name: '' });
+  const liveBefore = mem.data.get('box@v1');
+  const proved = await store.proveSnapshot(result.proof.backupKey);
+  assert.equal(proved.sha256, result.proof.sha256);
+  assert.equal(mem.data.get('box@v1'), liveBefore);
+  assert.equal('cutover' in store, false);
 });

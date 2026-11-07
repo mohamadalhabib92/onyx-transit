@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Button, Card, Field, ListItem, Screen, Section, Segmented, T, useToast } from '@/kit/ui';
 import { useTheme } from '@/kit/theme';
-import { PAYMENT_LABEL, store, type Role } from '@/state';
+import { applyProfile, applySignOut, PAYMENT_LABEL, store, type Role } from '@/state';
 
 export default function Account() {
   const t = useTheme();
@@ -23,7 +23,7 @@ export default function Account() {
           title="Enregistrer"
           disabled={!dirty}
           onPress={() => {
-            store.set((x) => ({ ...x, profile: p }));
+            store.set((x) => applyProfile(x, p));
             toast('Profil enregistré', 'success');
           }}
         />
@@ -52,7 +52,7 @@ export default function Account() {
         kind="secondary"
         icon="log-out"
         onPress={() => {
-          store.set((x) => ({ ...x, signedIn: false }));
+          store.set((x) => applySignOut(x));
           router.replace('/welcome');
         }}
       />

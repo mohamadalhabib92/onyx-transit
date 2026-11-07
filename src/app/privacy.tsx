@@ -18,6 +18,7 @@ export default function Privacy() {
   const toast = useToast();
   const s = store.use();
   const [confirm, setConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const setConsent = (k: 'location' | 'marketing', v: boolean) => store.set((x) => ({ ...x, consents: { ...x.consents, [k]: v, at: Date.now() } }));
   return (
     <Screen>
@@ -58,24 +59,54 @@ export default function Privacy() {
       {s.signedIn ? (
         <Section title="Mes droits">
           <Button
-            title="Exporter mes données (JSON)"
+            title="Exporter la copie brute locale"
             kind="secondary"
             icon="download"
-            onPress={() => exportText('onyx-mes-donnees.json', JSON.stringify({ exportedAt: new Date().toISOString(), ...s }, null, 2), 'application/json')}
+            onPress={async () => {
+              const raw = await store.readRaw();
+              if (raw == null) {
+                toast('Aucune copie brute stockée sur cet appareil', 'info');
+                return;
+              }
+              await exportText('onyx-brut-local.json', raw, 'application/json');
+              toast('Copie brute locale produite. Rien n’est envoyé à un serveur.', 'success');
+            }}
           />
-          <Button title="Supprimer mon compte et mes données" kind="danger" icon="trash" onPress={() => setConfirm(true)} />
+          <T v="small" muted>
+            Le fichier est le JSON stocké sous la clé locale, octets tels quels, y compris les champs inconnus. Sur le web il est téléchargé. Sur mobile, la feuille de partage s’ouvre : rien ne part tant que vous ne choisissez pas une destination. Ce n’est pas une sauvegarde de l’appareil.
+          </T>
+          <Button
+            title="Supprimer mon compte et mes données"
+            kind="danger"
+            icon="trash"
+            onPress={() => {
+              setDeleteError(null);
+              setConfirm(true);
+            }}
+          />
         </Section>
       ) : null}
       <Sheet visible={confirm} onClose={() => setConfirm(false)} title="Supprimer le compte ?">
-        <T>Toutes vos données (profil, trajets, reçus, documents) seront effacées de cet appareil. Action irréversible.</T>
+        <T>
+          La clé locale est effacée seulement après une copie brute vérifiée : mêmes octets, empreinte SHA-256, restauration dans une clé isolée puis effacement de cette clé isolée. La copie reste sur cet appareil. Ce n’est pas une sauvegarde du téléphone, ni une copie serveur. La clé active n’est pas restaurée : une bascule future reste à décider.
+        </T>
+        {deleteError ? <Banner kind="danger" title="Suppression annulée" text={deleteError} /> : null}
         <Button
-          title="Oui, tout supprimer"
+          title="Oui, copier puis effacer la clé active"
           kind="danger"
           onPress={async () => {
-            setConfirm(false);
-            await store.reset();
-            toast('Compte supprimé', 'success');
-            router.replace('/welcome');
+            try {
+              const result = await store.reset();
+              setConfirm(false);
+              if (result.proof) {
+                toast(`Copie ${result.proof.backupKey} · ${result.proof.rides ?? '—'} courses · ${result.proof.bytes} octets`, 'success');
+              } else {
+                toast('Aucune donnée stockée à copier', 'success');
+              }
+              router.replace('/welcome');
+            } catch (err) {
+              setDeleteError(err instanceof Error ? err.message : 'Suppression annulée. L’original n’a pas été effacé.');
+            }
           }}
         />
         <Button title="Annuler" kind="secondary" onPress={() => setConfirm(false)} />

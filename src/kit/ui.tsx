@@ -20,7 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePrefersReducedMotion } from './a11y';
 import { useOnline } from './net';
-import type { HydrateResult } from './store';
+import type { HydrateResult, StorageProof } from './store';
 import { alpha, useTheme } from './theme';
 
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -590,8 +590,10 @@ export function BootGate({
   appName: string;
   timeoutMs?: number;
 }) {
-  const [state, setState] = useState<'loading' | 'ready' | 'fallback' | 'corrupt' | 'copy-failed'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'fallback' | 'corrupt' | 'incompatible' | 'copy-failed'>('loading');
   const [backupKey, setBackupKey] = useState<string | null>(null);
+  const [proof, setProof] = useState<StorageProof | null>(null);
+  const [reasons, setReasons] = useState<string[]>([]);
   const [confirmFresh, setConfirmFresh] = useState(false);
   const [recoverError, setRecoverError] = useState<string | null>(null);
   const t = useTheme();
@@ -599,6 +601,8 @@ export function BootGate({
     setState('loading');
     setConfirmFresh(false);
     setRecoverError(null);
+    setProof(null);
+    setReasons([]);
     let done = false;
     const timer = setTimeout(() => {
       if (!done) setState('fallback');
@@ -608,17 +612,21 @@ export function BootGate({
         if (result.status === 'ignored') return;
         done = true;
         clearTimeout(timer);
-        if (result.status === 'corrupt') {
+        if (result.status === 'corrupt' || result.status === 'incompatible') {
           setBackupKey(result.backupKey);
-          setState('corrupt');
+          setProof(result.proof);
+          setReasons(result.status === 'incompatible' ? result.reasons : []);
+          setState(result.status);
           return;
         }
         if (result.status === 'corrupt-copy-failed') {
           setBackupKey(null);
+          setProof(null);
           setState('copy-failed');
           return;
         }
         setBackupKey(null);
+        setProof(null);
         setState('ready');
       })
       .catch(() => {
@@ -656,7 +664,11 @@ export function BootGate({
             <Banner
               kind="danger"
               title="Enregistrement désactivé"
-              text={`Les données illisibles restent sous la clé d’origine. Copie : ${backupKey}. Rien de nouveau n’est enregistré tant que vous ne repartez pas de zéro.`}
+              text={
+                reasons.length
+                  ? `État incompatible. La clé d’origine n’a pas été réécrite. Copie : ${backupKey}. Rien de nouveau n’est enregistré tant que vous ne repartez pas de zéro.`
+                  : `Les données illisibles restent sous la clé d’origine. Copie : ${backupKey}. Rien de nouveau n’est enregistré tant que vous ne repartez pas de zéro.`
+              }
               action={<Button small kind="danger" title="Repartir de zéro" onPress={() => setConfirmFresh(true)} />}
             />
             {confirmFresh ? (
@@ -684,15 +696,29 @@ export function BootGate({
         <Skeleton height={90} />
       </>,
     );
-  if (state === 'corrupt')
+  if (state === 'corrupt' || state === 'incompatible')
     return frame(
       <>
-        <T v="h2">Données illisibles</T>
+        <T v="h2">{state === 'incompatible' ? 'État incompatible' : 'Données illisibles'}</T>
         <Banner
           kind="danger"
-          title="Lecture impossible"
-          text={`Les données enregistrées sur cet appareil n’ont pas pu être lues. Une copie brute a été faite sous « ${backupKey} ». L’original n’a pas été écrasé.`}
+          title={state === 'incompatible' ? 'Réécriture refusée' : 'Lecture impossible'}
+          text={
+            state === 'incompatible'
+              ? `Ces données sont lisibles, mais les réécrire les abîmerait. Une copie brute a été vérifiée sous « ${backupKey} ». L’original n’a pas été écrasé.`
+              : `Les données enregistrées sur cet appareil n’ont pas pu être lues. Une copie brute a été faite sous « ${backupKey} ». L’original n’a pas été écrasé.`
+          }
         />
+        {reasons.length ? (
+          <T v="small">
+            {reasons.join('\n')}
+          </T>
+        ) : null}
+        {proof ? (
+          <T v="small" muted>
+            {`${proof.bytes} octets · ${proof.topLevelKeys ?? '—'} clés · ${proof.rides ?? '—'} courses · ${proof.journal ?? '—'} lignes de journal · empreinte ${proof.sha256}`}
+          </T>
+        ) : null}
         {confirmFresh ? (
           <>
             <T>Repartir de zéro remplace l’original par un profil vide. La copie « {backupKey} » reste en place. L’enregistrement fonctionne ensuite normalement.</T>

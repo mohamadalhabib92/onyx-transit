@@ -19,26 +19,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePrefersReducedMotion } from './a11y';
+import { useReducedTransparency } from './access';
 import { useOnline } from './net';
-import type { HydrateResult } from './store';
-import { alpha, useTheme } from './theme';
+import type { HydrateResult, StorageProof } from './store';
+import { haptic } from './haptics';
+import { FadeIn, PressableScale, springs } from './motion';
+import { space, typeScale } from '@/theme';
+import { alpha, buttonRelief, panelStyle, useTheme } from './theme';
 
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
 export { Ionicons };
 
 /* ---------- Typo ---------- */
-type TVariant = 'display' | 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'caption' | 'label' | 'mono';
-const sizes: Record<TVariant, { fs: number; fw: TextStyle['fontWeight']; lh?: number }> = {
-  display: { fs: 32, fw: '800', lh: 38 },
-  h1: { fs: 24, fw: '800', lh: 30 },
-  h2: { fs: 19, fw: '700', lh: 25 },
-  h3: { fs: 16, fw: '700', lh: 22 },
-  body: { fs: 15, fw: '400', lh: 21 },
-  small: { fs: 13, fw: '400', lh: 18 },
-  caption: { fs: 11.5, fw: '600', lh: 15 },
-  label: { fs: 12, fw: '700', lh: 16 },
-  mono: { fs: 13, fw: '500', lh: 18 },
-};
+type TVariant = keyof typeof typeScale;
 
 export function T({
   v = 'body',
@@ -63,11 +56,13 @@ export function T({
   tabular?: boolean;
 }) {
   const t = useTheme();
-  const s = sizes[v];
+  const s = typeScale[v];
   return (
     <Text
       numberOfLines={numberOfLines}
       selectable={selectable}
+      // Dynamic Type : les gros titres plafonnent à ×1,6 pour ne pas casser les mots ; le texte courant suit librement.
+      maxFontSizeMultiplier={v === 'display' || v === 'h1' ? 1.6 : v === 'h2' ? 1.8 : undefined}
       style={[
         {
           fontSize: s.fs * t.fontScale,
@@ -103,12 +98,19 @@ export function Screen({
   footer?: React.ReactNode;
 }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const insets = useSafeAreaInsets();
   const inner = (
-    <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', padding: padded ? 16 : 0, gap: 14, paddingBottom: 40 }}>{children}</View>
+    <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', padding: padded ? space.screen : 0, gap: space.stack, paddingBottom: space.xxl + space.sm }}>{children}</View>
   );
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top, overflow: 'hidden' }}>
+      {solid ? null : (
+        <>
+          <View pointerEvents="none" style={{ position: 'absolute', top: -90, right: -70, width: 280, height: 280, borderRadius: 140, backgroundColor: t.glow }} />
+          <View pointerEvents="none" style={{ position: 'absolute', top: 240, left: -100, width: 220, height: 220, borderRadius: 110, backgroundColor: t.glow2 }} />
+        </>
+      )}
       {header}
       {scroll ? (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
@@ -124,10 +126,10 @@ export function Screen({
 
 export function Header({ title, subtitle, right, left }: { title: string; subtitle?: string; right?: React.ReactNode; left?: React.ReactNode }) {
   return (
-    <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+    <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', paddingHorizontal: space.screen, paddingTop: space.md, paddingBottom: space.xs, flexDirection: 'row', alignItems: 'center', gap: space.sm + 2 }}>
       {left}
       <View style={{ flex: 1 }}>
-        <T v="h1" numberOfLines={1}>
+        <T v="h1" numberOfLines={2}>
           {title}
         </T>
         {subtitle ? (
@@ -147,21 +149,20 @@ export function Row({ children, gap = 10, style, wrap }: { children: React.React
 
 export function Card({ children, style, onPress, accent, a11y }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; accent?: string; a11y?: string }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const base: ViewStyle = {
-    backgroundColor: t.surface,
+    ...panelStyle(t, solid),
     borderRadius: t.radius,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: t.border,
-    padding: 14,
-    gap: 8,
-    borderLeftWidth: accent ? 3 : StyleSheet.hairlineWidth,
-    borderLeftColor: accent ?? t.border,
+    padding: space.md + 2,
+    gap: space.sm,
+    borderLeftWidth: accent ? 3 : 1,
+    borderLeftColor: accent ?? t.highlight,
   };
   if (onPress)
     return (
-      <Pressable accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} style={({ pressed }) => [base, { opacity: pressed ? 0.85 : 1 }, style]}>
+      <PressableScale accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} scaleTo={0.985} hapticKind="select" style={({ pressed }) => [base, { opacity: pressed ? 0.92 : 1 }, style]}>
         {children}
-      </Pressable>
+      </PressableScale>
     );
   return <View style={[base, style]}>{children}</View>;
 }
@@ -211,77 +212,112 @@ export function Button({
   a11y?: string;
 }) {
   const t = useTheme();
-  const bg = { primary: t.primary, secondary: t.surface2, ghost: 'transparent', danger: t.danger, success: t.success }[kind];
+  const calm = usePrefersReducedMotion();
+  const solid = useReducedTransparency();
+  const [down, setDown] = useState(false);
+  const ghost = kind === 'ghost';
+  const bg = {
+    primary: t.primary,
+    secondary: solid ? t.surface2 : t.glassStrong,
+    ghost: 'transparent',
+    danger: t.danger,
+    success: t.success,
+  }[kind];
   const fg = { primary: t.primaryText, secondary: t.text, ghost: t.primary, danger: t.primaryText, success: t.primaryText }[kind];
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={a11y ?? title}
-      accessibilityState={{ disabled: !!disabled }}
+      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       disabled={disabled || loading}
       onPress={onPress}
-      style={({ pressed }) => [
-        {
-          minHeight: small ? 44 : 48,
-          paddingHorizontal: small ? 12 : 18,
-          borderRadius: t.radius - 2,
-          backgroundColor: bg,
-          borderWidth: kind === 'secondary' || kind === 'ghost' ? StyleSheet.hairlineWidth : 0,
-          borderColor: kind === 'ghost' ? 'transparent' : t.border,
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'row',
-          gap: 8,
-          opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
-          alignSelf: full ? 'stretch' : 'auto',
-        },
-        style,
-      ]}
+      onPressIn={() => setDown(true)}
+      onPressOut={() => setDown(false)}
+      hapticKind={kind === 'danger' ? 'warning' : 'tap'}
+      style={{ alignSelf: full ? 'stretch' : 'auto', opacity: disabled ? 0.45 : 1 }}
     >
-      {loading ? <ActivityIndicator color={fg} /> : icon ? <Ionicons name={icon} size={small ? 16 : 18} color={fg} /> : null}
-      <Text style={{ color: fg, fontWeight: '700', fontSize: (small ? 13 : 15) * t.fontScale }}>{title}</Text>
-    </Pressable>
+      <View
+        style={[
+          {
+            minHeight: small ? 44 : 48,
+            paddingHorizontal: small ? space.md : space.lg + 2,
+            borderRadius: t.radius - 2,
+            backgroundColor: bg,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: space.sm,
+          },
+          buttonRelief(t, down && !disabled, calm, ghost),
+          style,
+        ]}
+      >
+        {loading ? <ActivityIndicator color={fg} /> : icon ? <Ionicons name={icon} size={small ? 16 : 18} color={fg} /> : null}
+        <Text maxFontSizeMultiplier={1.6} style={{ color: fg, fontWeight: '700', fontSize: (small ? 13 : 15) * t.fontScale, letterSpacing: 0.2 }}>{title}</Text>
+      </View>
+    </PressableScale>
   );
 }
 
 export function IconButton({ icon, onPress, a11y, color, size = 22 }: { icon: IconName; onPress?: () => void; a11y: string; color?: string; size?: number }) {
   const t = useTheme();
+  const calm = usePrefersReducedMotion();
+  const solid = useReducedTransparency();
+  const [down, setDown] = useState(false);
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={a11y}
       onPress={onPress}
+      onPressIn={() => setDown(true)}
+      onPressOut={() => setDown(false)}
       hitSlop={6}
-      style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' })}
+      scaleTo={0.94}
+      hapticKind="select"
+      style={{ width: 44, height: 44 }}
     >
-      <Ionicons name={icon} size={size} color={color ?? t.text} />
-    </Pressable>
+      <View
+        style={[
+          { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: solid ? t.surface2 : t.glassStrong },
+          buttonRelief(t, down, calm),
+        ]}
+      >
+        <Ionicons name={icon} size={size} color={color ?? t.text} />
+      </View>
+    </PressableScale>
   );
 }
 
 export function Chip({ label, selected, onPress, color, icon }: { label: string; selected?: boolean; onPress?: () => void; color?: string; icon?: IconName }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const c = color ?? t.primary;
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ selected: !!selected }}
       onPress={onPress}
+      scaleTo={0.95}
+      hapticKind="select"
       style={{
-        minHeight: 36,
-        paddingHorizontal: 12,
-        borderRadius: 18,
+        minHeight: 44,
+        maxWidth: '100%',
+        paddingHorizontal: space.md,
+        borderRadius: 22,
         borderWidth: 1,
         borderColor: selected ? c : t.border,
-        backgroundColor: selected ? alpha(c, 0.16) : t.surface,
+        borderTopColor: t.highlight,
+        backgroundColor: selected ? alpha(c, 0.16) : solid ? t.surface : t.glassStrong,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+        boxShadow: `inset 0 1px 0 ${t.highlight}, 0 1px 2px ${t.shadowSoft}`,
       }}
     >
       {icon ? <Ionicons name={icon} size={14} color={selected ? c : t.textMuted} /> : null}
-      <Text style={{ color: selected ? c : t.text, fontWeight: selected ? '700' : '500', fontSize: 13 * t.fontScale }}>{label}</Text>
-    </Pressable>
+      <Text maxFontSizeMultiplier={1.6} style={{ color: selected ? c : t.text, fontWeight: selected ? '700' : '500', fontSize: 13 * t.fontScale, flexShrink: 1 }}>{label}</Text>
+    </PressableScale>
   );
 }
 
@@ -291,15 +327,16 @@ export function Badge({ label, color, icon }: { label: string; color?: string; i
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: alpha(c, 0.15) }}>
       {icon ? <Ionicons name={icon} size={12} color={c} /> : null}
-      <Text style={{ color: c, fontSize: 11 * t.fontScale, fontWeight: '700' }}>{label}</Text>
+      <Text maxFontSizeMultiplier={1.6} style={{ color: c, fontSize: 11 * t.fontScale, fontWeight: '700' }}>{label}</Text>
     </View>
   );
 }
 
 export function Segmented<K extends string>({ options, value, onChange }: { options: { key: K; label: string }[]; value: K; onChange: (k: K) => void }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   return (
-    <View style={{ flexDirection: 'row', backgroundColor: t.surface2, borderRadius: t.radius, padding: 3 }}>
+    <View style={{ flexDirection: 'row', backgroundColor: solid ? t.track : t.glass, borderRadius: t.radius, padding: 3, borderWidth: 1, borderColor: t.border }}>
       {options.map((o) => {
         const on = o.key === value;
         return (
@@ -307,10 +344,25 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
             key={o.key}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            onPress={() => onChange(o.key)}
-            style={{ flex: 1, minHeight: 38, borderRadius: t.radius - 3, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? t.surface : 'transparent' }}
+            accessibilityLabel={o.label}
+            onPress={() => {
+              if (!on) haptic('select');
+              onChange(o.key);
+            }}
+            style={{
+              flex: 1,
+              minHeight: 44,
+              paddingHorizontal: 6,
+              borderRadius: t.radius - 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: on ? t.raised : 'transparent',
+              borderTopWidth: on ? 1 : 0,
+              borderTopColor: t.highlight,
+              boxShadow: on ? `inset 0 1px 0 ${t.highlight}, 0 2px 6px ${t.shadowSoft}` : 'none',
+            }}
           >
-            <Text style={{ color: on ? t.text : t.textMuted, fontWeight: on ? '700' : '500', fontSize: 13 * t.fontScale }}>{o.label}</Text>
+            <Text maxFontSizeMultiplier={1.6} numberOfLines={2} style={{ color: on ? t.text : t.textMuted, fontWeight: on ? '700' : '500', fontSize: 13 * t.fontScale, textAlign: 'center' }}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -321,6 +373,8 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
 /* ---------- Formulaires ---------- */
 export function Field({ label, hint, error, ...props }: TextInputProps & { label: string; hint?: string; error?: string }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 5 }}>
       <T v="label" muted>
@@ -330,16 +384,25 @@ export function Field({ label, hint, error, ...props }: TextInputProps & { label
         placeholderTextColor={t.textMuted}
         accessibilityLabel={label}
         {...props}
+        onFocus={(e) => {
+          setFocused(true);
+          props.onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          props.onBlur?.(e);
+        }}
         style={[
           {
-            minHeight: props.multiline ? 84 : 46,
+            minHeight: props.multiline ? 84 : 48,
             borderWidth: 1,
-            borderColor: error ? t.danger : t.border,
+            borderColor: error ? t.danger : focused ? t.primary : t.border,
+            borderTopColor: error ? t.danger : focused ? t.primary : t.highlight,
             borderRadius: t.radius - 2,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
+            paddingHorizontal: space.md,
+            paddingVertical: space.sm + 2,
             color: t.text,
-            backgroundColor: t.surface,
+            backgroundColor: solid ? t.surface : t.glassStrong,
             fontSize: 15 * t.fontScale,
             textAlignVertical: props.multiline ? 'top' : 'center',
           },
@@ -371,7 +434,10 @@ export function ToggleRow({ label, sub, value, onChange, disabled }: { label: st
           </T>
         ) : null}
       </View>
-      <Switch accessibilityLabel={label} value={value} onValueChange={onChange} disabled={disabled} trackColor={{ true: t.primary, false: t.textMuted }} thumbColor={t.primaryText} />
+      <Switch accessibilityLabel={label} value={value} onValueChange={(v) => {
+          haptic('select');
+          onChange(v);
+        }} disabled={disabled} trackColor={{ true: t.primary, false: t.textMuted }} thumbColor={t.primaryText} />
     </Row>
   );
 }
@@ -386,7 +452,7 @@ export function ListItem({ title, sub, right, icon, iconColor, onPress }: { titl
         </View>
       ) : null}
       <View style={{ flex: 1 }}>
-        <T numberOfLines={1} style={{ fontWeight: '600' }}>
+        <T numberOfLines={2} style={{ fontWeight: '600' }}>
           {title}
         </T>
         {sub ? (
@@ -401,9 +467,9 @@ export function ListItem({ title, sub, right, icon, iconColor, onPress }: { titl
   );
   if (!onPress) return content;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+    <PressableScale accessibilityRole="button" accessibilityLabel={sub ? `${title}, ${sub}` : title} onPress={onPress} scaleTo={0.985} hapticKind="select" style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
       {content}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -444,9 +510,26 @@ export function OfflineBadge({ text = 'Hors ligne — données en cache' }: { te
 export function EmptyState({ icon = 'sparkles', title, text, action }: { icon?: IconName; title: string; text?: string; action?: React.ReactNode }) {
   const t = useTheme();
   return (
-    <View style={{ alignItems: 'center', padding: 28, gap: 8 }}>
-      <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: alpha(t.primary, 0.12), alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={icon} size={30} color={t.primary} />
+    <FadeIn style={{ alignItems: 'center', paddingVertical: 32, paddingHorizontal: 24, gap: 8 }}>
+      <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: alpha(t.primary, 0.08), alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+        <View
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: t.surface,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: alpha(t.primary, 0.4),
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: t.primary,
+            shadowOpacity: 0.25,
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: 6 },
+          }}
+        >
+          <Ionicons name={icon} size={28} color={t.primary} />
+        </View>
       </View>
       <T v="h3" center>
         {title}
@@ -456,8 +539,8 @@ export function EmptyState({ icon = 'sparkles', title, text, action }: { icon?: 
           {text}
         </T>
       ) : null}
-      {action}
-    </View>
+      {action ? <View style={{ marginTop: 8 }}>{action}</View> : null}
+    </FadeIn>
   );
 }
 
@@ -482,17 +565,25 @@ export function Skeleton({ height = 16, width = '100%', style }: { height?: numb
 export function Progress({ value, color, height = 8 }: { value: number; color?: string; height?: number }) {
   const t = useTheme();
   const v = Math.max(0, Math.min(1, value));
+  const reduce = usePrefersReducedMotion();
+  const w = useRef(new Animated.Value(v)).current;
+  useEffect(() => {
+    // Largeur animée en ressort (pas de pilote natif pour une largeur en %).
+    if (reduce) w.setValue(v);
+    else Animated.spring(w, { toValue: v, ...springs.gentle, useNativeDriver: false }).start();
+  }, [v, reduce, w]);
   return (
     <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(v * 100) }} style={{ height, borderRadius: height / 2, backgroundColor: t.surface2, overflow: 'hidden' }}>
-      <View style={{ width: `${v * 100}%`, height: '100%', backgroundColor: color ?? t.primary, borderRadius: height / 2 }} />
+      <Animated.View style={{ width: w.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), height: '100%', backgroundColor: color ?? t.primary, borderRadius: height / 2 }} />
     </View>
   );
 }
 
 export function Stat({ label, value, sub, color, demo }: { label: string; value: string; sub?: string; color?: string; demo?: boolean }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   return (
-    <View style={{ flexGrow: 1, flexBasis: 140, backgroundColor: t.surface, borderRadius: t.radius, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border, padding: 12, gap: 2 }}>
+    <View style={{ ...panelStyle(t, solid), flexGrow: 1, flexBasis: 140, borderRadius: t.radius, padding: space.md, gap: 2 }}>
       <Row style={{ justifyContent: 'space-between' }}>
         <T v="caption" muted>
           {label}
@@ -514,10 +605,11 @@ export function Stat({ label, value, sub, color, demo }: { label: string; value:
 export function Sheet({ visible, onClose, title, children }: { visible: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const solid = useReducedTransparency();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: t.overlay }} />
-      <View style={{ backgroundColor: t.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingBottom: insets.bottom + 12 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: solid ? (t.dark ? 'rgba(0,0,0,0.88)' : 'rgba(28,24,20,0.72)') : t.overlay }} />
+      <View style={{ backgroundColor: solid ? t.surface : t.glassStrong, borderTopWidth: 1, borderTopColor: t.highlight, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingBottom: insets.bottom + space.md }}>
         <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center' }}>
           <Row style={{ padding: 16, paddingBottom: 6, justifyContent: 'space-between' }}>
             <T v="h2">{title}</T>
@@ -543,6 +635,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
   const push = useCallback((text: string, kind: Toast['kind'] = 'info') => {
     const id = Date.now() + Math.random();
+    if (kind !== 'info') haptic(kind === 'error' ? 'error' : 'success');
     setToasts((x) => [...x, { id, text, kind }]);
     setTimeout(() => setToasts((x) => x.filter((y) => y.id !== id)), 3200);
   }, []);
@@ -551,8 +644,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: insets.bottom + 72, alignItems: 'center', gap: 8 }}>
         {toasts.map((x) => (
+          <FadeIn key={x.id} distance={16}>
           <View
-            key={x.id}
             accessibilityLiveRegion="polite"
             style={{
               maxWidth: 520,
@@ -569,6 +662,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             <Ionicons name={x.kind === 'error' ? 'alert-circle' : x.kind === 'success' ? 'checkmark-circle' : 'information-circle'} size={18} color={t.primaryText} />
             <Text style={{ color: t.primaryText, fontWeight: '600' }}>{x.text}</Text>
           </View>
+          </FadeIn>
         ))}
       </View>
     </ToastCtx.Provider>
@@ -590,8 +684,10 @@ export function BootGate({
   appName: string;
   timeoutMs?: number;
 }) {
-  const [state, setState] = useState<'loading' | 'ready' | 'fallback' | 'corrupt' | 'copy-failed'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'fallback' | 'corrupt' | 'incompatible' | 'copy-failed'>('loading');
   const [backupKey, setBackupKey] = useState<string | null>(null);
+  const [proof, setProof] = useState<StorageProof | null>(null);
+  const [reasons, setReasons] = useState<string[]>([]);
   const [confirmFresh, setConfirmFresh] = useState(false);
   const [recoverError, setRecoverError] = useState<string | null>(null);
   const t = useTheme();
@@ -599,6 +695,8 @@ export function BootGate({
     setState('loading');
     setConfirmFresh(false);
     setRecoverError(null);
+    setProof(null);
+    setReasons([]);
     let done = false;
     const timer = setTimeout(() => {
       if (!done) setState('fallback');
@@ -608,17 +706,21 @@ export function BootGate({
         if (result.status === 'ignored') return;
         done = true;
         clearTimeout(timer);
-        if (result.status === 'corrupt') {
+        if (result.status === 'corrupt' || result.status === 'incompatible') {
           setBackupKey(result.backupKey);
-          setState('corrupt');
+          setProof(result.proof);
+          setReasons(result.status === 'incompatible' ? result.reasons : []);
+          setState(result.status);
           return;
         }
         if (result.status === 'corrupt-copy-failed') {
           setBackupKey(null);
+          setProof(null);
           setState('copy-failed');
           return;
         }
         setBackupKey(null);
+        setProof(null);
         setState('ready');
       })
       .catch(() => {
@@ -656,7 +758,11 @@ export function BootGate({
             <Banner
               kind="danger"
               title="Enregistrement désactivé"
-              text={`Les données illisibles restent sous la clé d’origine. Copie : ${backupKey}. Rien de nouveau n’est enregistré tant que vous ne repartez pas de zéro.`}
+              text={
+                reasons.length
+                  ? `État incompatible. La clé d’origine n’a pas été réécrite. Copie : ${backupKey}. Rien de nouveau n’est enregistré tant que vous ne repartez pas de zéro.`
+                  : `Les données illisibles restent sous la clé d’origine. Copie : ${backupKey}. Rien de nouveau n’est enregistré tant que vous ne repartez pas de zéro.`
+              }
               action={<Button small kind="danger" title="Repartir de zéro" onPress={() => setConfirmFresh(true)} />}
             />
             {confirmFresh ? (
@@ -684,15 +790,29 @@ export function BootGate({
         <Skeleton height={90} />
       </>,
     );
-  if (state === 'corrupt')
+  if (state === 'corrupt' || state === 'incompatible')
     return frame(
       <>
-        <T v="h2">Données illisibles</T>
+        <T v="h2">{state === 'incompatible' ? 'État incompatible' : 'Données illisibles'}</T>
         <Banner
           kind="danger"
-          title="Lecture impossible"
-          text={`Les données enregistrées sur cet appareil n’ont pas pu être lues. Une copie brute a été faite sous « ${backupKey} ». L’original n’a pas été écrasé.`}
+          title={state === 'incompatible' ? 'Réécriture refusée' : 'Lecture impossible'}
+          text={
+            state === 'incompatible'
+              ? `Ces données sont lisibles, mais les réécrire les abîmerait. Une copie brute a été vérifiée sous « ${backupKey} ». L’original n’a pas été écrasé.`
+              : `Les données enregistrées sur cet appareil n’ont pas pu être lues. Une copie brute a été faite sous « ${backupKey} ». L’original n’a pas été écrasé.`
+          }
         />
+        {reasons.length ? (
+          <T v="small">
+            {reasons.join('\n')}
+          </T>
+        ) : null}
+        {proof ? (
+          <T v="small" muted>
+            {`${proof.bytes} octets · ${proof.topLevelKeys ?? '—'} clés · ${proof.rides ?? '—'} courses · ${proof.journal ?? '—'} lignes de journal · empreinte ${proof.sha256}`}
+          </T>
+        ) : null}
         {confirmFresh ? (
           <>
             <T>Repartir de zéro remplace l’original par un profil vide. La copie « {backupKey} » reste en place. L’enregistrement fonctionne ensuite normalement.</T>

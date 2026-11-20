@@ -5,9 +5,9 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LostRideNotice } from '@/components/LostRideNotice';
 import { ErrorBoundary } from '@/kit/error-boundary';
-import { ThemeProvider } from '@/kit/theme';
+import { VerreProvider, useTheme } from '@/kit/theme';
+import { FeedbackProvider } from '@/kit/motion';
 import { BootGate, ToastProvider } from '@/kit/ui';
-import { onyx } from '@/theme';
 import { store } from '@/state';
 import { useRideSimulator } from '@/lib/simulator';
 
@@ -16,26 +16,35 @@ function Simulator() {
   return null;
 }
 
-export default function RootLayout() {
+function Shell() {
+  const t = useTheme();
   const hydrate = useCallback(() => store.hydrate(), []);
   return (
-    <SafeAreaProvider>
-      <ThemeProvider value={onyx}>
-        <ErrorBoundary>
-          <ToastProvider>
-            <StatusBar style="light" />
-            <BootGate hydrate={hydrate} recover={() => store.startFresh()} appName="Onyx Transit">
+    <ErrorBoundary>
+      <ToastProvider>
+        <FeedbackProvider>
+          <StatusBar style={t.dark ? 'light' : 'dark'} />
+          <BootGate hydrate={hydrate} recover={() => store.startFresh()} appName="Onyx Transit">
+            <View style={{ flex: 1, backgroundColor: t.bg }}>
+              <LostRideNotice />
+              <Simulator />
               <View style={{ flex: 1 }}>
-                <LostRideNotice />
-                <Simulator />
-                <View style={{ flex: 1 }}>
-                  <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: onyx.bg } }} />
-                </View>
+                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.bg } }} />
               </View>
-            </BootGate>
-          </ToastProvider>
-        </ErrorBoundary>
-      </ThemeProvider>
+            </View>
+          </BootGate>
+        </FeedbackProvider>
+      </ToastProvider>
+    </ErrorBoundary>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <VerreProvider>
+        <Shell />
+      </VerreProvider>
     </SafeAreaProvider>
   );
 }

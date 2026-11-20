@@ -1,16 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { AccessibilityInfo, Platform } from 'react-native';
 
-/** Respect de « Réduire les animations » (web). Sur natif : false tant que l’API n’est pas branchée. */
+/**
+ * « Réduire les animations » : API d'accessibilité (iOS, Android) et prefers-reduced-motion (web).
+ */
 export function usePrefersReducedMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
+  const [nativeReduce, setNativeReduce] = useState(false);
+  const [webReduce, setWebReduce] = useState(false);
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const apply = () => setReduce(mq.matches);
-    apply();
-    mq.addEventListener?.('change', apply);
-    return () => mq.removeEventListener?.('change', apply);
+    let alive = true;
+    void AccessibilityInfo.isReduceMotionEnabled?.()
+      .then((v) => alive && setNativeReduce(!!v))
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (v: boolean) => setNativeReduce(!!v));
+    let mq: MediaQueryList | null = null;
+    const onMq = () => setWebReduce(!!mq?.matches);
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+      onMq();
+      mq.addEventListener?.('change', onMq);
+    }
+    return () => {
+      alive = false;
+      sub?.remove?.();
+      mq?.removeEventListener?.('change', onMq);
+    };
   }, []);
-  return reduce;
+  return nativeReduce || webReduce;
 }

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createPersistedStore, uid } from '@/kit/store';
+import { createPersistedStore, IncompatibleStoredState, uid } from '@/kit/store';
 import { publishLostRides, type LostRide } from '@/lib/lost-rides';
 import { CATEGORIES, type CategoryId, type LatLon } from '@/lib/pricing';
 import { assessDocs, canAssign, capToMaximum, parseOtrMaxMinutes, type DocDef, type DocIssue } from '@/lib/rules';
@@ -132,21 +132,102 @@ function initialState(): AppState {
   };
 }
 
+function isPlain(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Raisons pour lesquelles réécrire le document détruirait des données.
+ * Les champs inconnus et les valeurs futures d’un type déjà admis ne sont pas des raisons.
+ * Une clé absente (ancien document) n’est pas une raison.
+ */
+export function preservationIssues(saved: unknown): string[] {
+  if (!isPlain(saved)) return ['document : forme inattendue'];
+  const issues: string[] = [];
+  const expectObject = (key: string) => {
+    if (!(key in saved)) return;
+    if (!isPlain(saved[key])) issues.push(`${key} : forme inattendue, non réécrite`);
+  };
+  for (const key of ['profile', 'consents', 'driver', 'cities']) expectObject(key);
+
+  if ('rides' in saved) {
+    if (!Array.isArray(saved.rides)) {
+      issues.push('rides : tableau attendu, forme future ou étrangère laissée intacte');
+    } else {
+      const ids = new Set<string>();
+      saved.rides.forEach((ride, index) => {
+        if (!isPlain(ride)) {
+          issues.push(`rides[${index}] : entrée non objet`);
+          return;
+        }
+        const id = typeof ride.id === 'string' && ride.id.length > 0 ? ride.id : '';
+        if (!id) issues.push(`rides[${index}] : identifiant historique absent ou non textuel`);
+        else if (ids.has(id)) issues.push(`rides : identifiant en double ${id}`);
+        else ids.add(id);
+        const label = id || String(index);
+        if ('pickup' in ride && ride.pickup != null && !isPlain(ride.pickup)) issues.push(`course ${label} : adresse de départ illisible`);
+        if ('dropoff' in ride && ride.dropoff != null && !isPlain(ride.dropoff)) issues.push(`course ${label} : adresse d’arrivée illisible`);
+        if ('events' in ride && ride.events != null && !Array.isArray(ride.events)) issues.push(`course ${label} : historique non tableau`);
+        if ('priceMaximum' in ride && ride.priceMaximum != null && typeof ride.priceMaximum !== 'number') issues.push(`course ${label} : prix maximum de forme inattendue`);
+        if ('quotedAt' in ride && ride.quotedAt != null && typeof ride.quotedAt !== 'number') issues.push(`course ${label} : horodatage de forme inattendue`);
+      });
+    }
+  }
+
+  if ('journal' in saved) {
+    if (!Array.isArray(saved.journal)) {
+      issues.push('journal : tableau attendu, historique laissé intact');
+    } else {
+      const ids = new Set<string>();
+      saved.journal.forEach((entry, index) => {
+        if (!isPlain(entry)) {
+          issues.push(`journal[${index}] : entrée non objet`);
+          return;
+        }
+        const id = typeof entry.id === 'string' && entry.id.length > 0 ? entry.id : '';
+        if (!id) issues.push(`journal[${index}] : identifiant historique absent ou non textuel`);
+        else if (ids.has(id)) issues.push(`journal : identifiant en double ${id}`);
+        else ids.add(id);
+      });
+    }
+  }
+
+  if (isPlain(saved.driver)) {
+    const driver = saved.driver;
+    if ('docs' in driver && !isPlain(driver.docs)) issues.push('véhicule/documents : forme inattendue');
+    if ('docExpiry' in driver && !isPlain(driver.docExpiry)) issues.push('échéances documents : forme inattendue');
+    if ('refused' in driver && !Array.isArray(driver.refused)) issues.push('courses refusées : forme inattendue');
+    if ('vehicleSeats' in driver && driver.vehicleSeats != null && typeof driver.vehicleSeats !== 'number') issues.push('places véhicule : forme inattendue');
+    if ('drivingMinutes' in driver && driver.drivingMinutes != null && typeof driver.drivingMinutes !== 'number') issues.push('minutes de conduite : forme inattendue');
+    if ('sessionEarnings' in driver && driver.sessionEarnings != null && typeof driver.sessionEarnings !== 'number') issues.push('gains de session : forme inattendue');
+    if ('vtcCardNumber' in driver && driver.vtcCardNumber != null && typeof driver.vtcCardNumber !== 'string') issues.push('carte professionnelle : forme inattendue');
+    if ('plateLabel' in driver && driver.plateLabel != null && typeof driver.plateLabel !== 'string') issues.push('plaque : forme inattendue');
+    if ('vehicleCategory' in driver && driver.vehicleCategory != null && typeof driver.vehicleCategory !== 'string') issues.push('catégorie véhicule : forme inattendue');
+  }
+
+  if ('driverShareDemo' in saved && saved.driverShareDemo != null && typeof saved.driverShareDemo !== 'number') {
+    issues.push('hypothèse de part chauffeur : forme inattendue');
+  }
+  return issues;
+}
+
 function normalizeRide(raw: Ride): Ride {
   const priceMaximum = typeof raw.priceMaximum === 'number' ? raw.priceMaximum : raw.price;
   return {
     ...raw,
     priceMaximum,
-    quotedAt: raw.quotedAt ?? raw.createdAt,
+    quotedAt: typeof raw.quotedAt === 'number' ? raw.quotedAt : raw.createdAt,
     events: Array.isArray(raw.events) ? raw.events : [],
   };
 }
 
-function revive(saved: Partial<AppState> | null): AppState {
+export function reviveAppState(saved: Partial<AppState> | null): AppState {
   const base = initialState();
-  if (!saved || typeof saved !== 'object') return base;
+  if (saved == null) return base;
+  const issues = preservationIssues(saved);
+  if (issues.length) throw new IncompatibleStoredState(issues);
   const driverSaved = saved.driver ?? base.driver;
-  const share = typeof saved.driverShareDemo === 'number' && saved.driverShareDemo > 0 && saved.driverShareDemo <= 1 ? saved.driverShareDemo : base.driverShareDemo;
+  const share = typeof saved.driverShareDemo === 'number' ? saved.driverShareDemo : base.driverShareDemo;
   return {
     ...base,
     ...saved,
@@ -167,7 +248,47 @@ function revive(saved: Partial<AppState> | null): AppState {
       drivingMinutes: typeof driverSaved.drivingMinutes === 'number' ? driverSaved.drivingMinutes : 0,
     },
     rides: Array.isArray(saved.rides) ? saved.rides.map((r) => normalizeRide(r)) : [],
-    journal: Array.isArray(saved.journal) ? saved.journal : [],
+    journal: Array.isArray(saved.journal) ? saved.journal.map((entry) => ({ ...entry })) : [],
+  };
+}
+
+/** Déconnexion : le drapeau de session change, le reste du document reste. */
+export function applySignOut<T extends { signedIn: boolean }>(s: T): T {
+  return { ...s, signedIn: false };
+}
+
+/** Enregistre les quatre champs du formulaire sans retirer les clés de profil inconnues. */
+export function applyProfile(s: AppState, profile: Pick<AppState['profile'], 'name' | 'email' | 'phone' | 'company'>): AppState {
+  return {
+    ...s,
+    profile: {
+      ...s.profile,
+      name: profile.name,
+      email: profile.email,
+      phone: profile.phone,
+      company: profile.company,
+    },
+  };
+}
+
+/** Nouvelle session locale : fusionne le profil et les consentements, ne remplace pas le document. */
+export function applySignIn(
+  s: AppState,
+  input: { name: string; email: string; phone: string; terms: boolean; privacy: boolean; location: boolean; marketing: boolean },
+  at = Date.now(),
+): AppState {
+  return {
+    ...s,
+    signedIn: true,
+    profile: { ...s.profile, name: input.name.trim(), email: input.email.trim(), phone: input.phone.trim() },
+    consents: {
+      ...s.consents,
+      terms: input.terms,
+      privacy: input.privacy,
+      location: input.location,
+      marketing: input.marketing,
+      at,
+    },
   };
 }
 
@@ -178,7 +299,7 @@ function noteInterimDiscard(previous: AppState, loaded: AppState) {
 }
 
 /** Clé inchangée : onyx-transit@v1. La reprise est additive. */
-export const store = createPersistedStore<AppState>('onyx-transit', initialState, 1, revive, AsyncStorage, noteInterimDiscard);
+export const store = createPersistedStore<AppState>('onyx-transit', initialState, 1, reviveAppState, AsyncStorage, noteInterimDiscard);
 
 export const STATUS_LABEL: Record<RideStatus, string> = {
   requested: 'Recherche d’un chauffeur',

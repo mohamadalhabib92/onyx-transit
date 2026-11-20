@@ -1,0 +1,25 @@
+# Contrôles sur chaque push et chaque pull request.
+# Pas de déploiement (la PWA part de main via pages.yml), pas de secrets, pas d'EAS.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: expo export (web)
+        run: npx expo export -p web

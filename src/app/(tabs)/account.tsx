@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Button, Card, Field, ListItem, Screen, Section, Segmented, T, useToast } from '@/kit/ui';
+import { Button, Card, Field, ListItem, Screen, Section, Segmented, T, ToggleRow, useToast } from '@/kit/ui';
+import { useVibrations } from '@/kit/access';
 import { useTheme } from '@/kit/theme';
-import { PAYMENT_LABEL, store, type Role } from '@/state';
+import { applyProfile, applySignOut, PAYMENT_LABEL, store, type Role } from '@/state';
 
 export default function Account() {
   const t = useTheme();
@@ -10,6 +11,7 @@ export default function Account() {
   const toast = useToast();
   const s = store.use();
   const [p, setP] = useState(s.profile);
+  const [vibrations, setVibrations] = useVibrations();
   const dirty = JSON.stringify(p) !== JSON.stringify(s.profile);
   return (
     <Screen>
@@ -23,7 +25,7 @@ export default function Account() {
           title="Enregistrer"
           disabled={!dirty}
           onPress={() => {
-            store.set((x) => ({ ...x, profile: p }));
+            store.set((x) => applyProfile(x, p));
             toast('Profil enregistré', 'success');
           }}
         />
@@ -42,6 +44,12 @@ export default function Account() {
           En démo locale, les trois espaces restent accessibles. En production, les droits sont attribués côté serveur.
         </T>
       </Section>
+      <Section title="Confort">
+        <ToggleRow label="Vibrations" sub="Petits retours tactiles quand vous touchez un bouton." value={vibrations} onChange={setVibrations} />
+        <T v="small" muted>
+          L’apparence suit le mode clair ou sombre du téléphone. « Réduire la transparence » rend les surfaces opaques, « Réduire les animations » fige le relief.
+        </T>
+      </Section>
       <Card>
         <ListItem icon="card" title="Paiement" sub={PAYMENT_LABEL[s.payment]} onPress={() => router.push('/payments')} />
         <ListItem icon="lock-closed" title="Confidentialité & données" sub="Consentements, export, suppression" onPress={() => router.push('/privacy')} />
@@ -52,7 +60,7 @@ export default function Account() {
         kind="secondary"
         icon="log-out"
         onPress={() => {
-          store.set((x) => ({ ...x, signedIn: false }));
+          store.set((x) => applySignOut(x));
           router.replace('/welcome');
         }}
       />

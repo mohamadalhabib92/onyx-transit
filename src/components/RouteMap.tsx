@@ -87,7 +87,7 @@ export function RouteMap({
   const routeSummary = `Carte schématique. Départ : ${from}. Destination : ${to}.${label ? ' ' + label : ''}`;
 
   return (
-    <View accessibilityLabel={routeSummary} style={{ borderRadius: th.radius, overflow: 'hidden', backgroundColor: th.bg, borderWidth: 1, borderColor: th.border }}>
+    <View accessibilityLabel={routeSummary} style={{ borderRadius: th.radius, overflow: 'hidden', backgroundColor: th.bg, borderWidth: 1, borderColor: th.border, borderTopColor: th.highlight }}>
       <View style={{ width: '100%', aspectRatio: W / H }}>
         <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`}>
           <Defs>

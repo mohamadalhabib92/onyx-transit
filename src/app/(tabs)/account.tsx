@@ -46,6 +46,9 @@ export default function Account() {
       </Section>
       <Section title="Confort">
         <ToggleRow label="Vibrations" sub="Petits retours tactiles quand vous touchez un bouton." value={vibrations} onChange={setVibrations} />
+        <T v="small" muted>
+          L’apparence suit le mode clair ou sombre du téléphone. « Réduire la transparence » rend les surfaces opaques, « Réduire les animations » fige le relief.
+        </T>
       </Section>
       <Card>
         <ListItem icon="card" title="Paiement" sub={PAYMENT_LABEL[s.payment]} onPress={() => router.push('/payments')} />

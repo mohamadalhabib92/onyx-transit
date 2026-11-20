@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Banner, Button, Card, Field, Ionicons, Row, Screen, T } from '@/kit/ui';
+import { useReducedTransparency } from '@/kit/access';
 import { alpha, useTheme } from '@/kit/theme';
 import { applySignIn, store } from '@/state';
 import { backendReady } from '@/config';
@@ -29,6 +30,7 @@ function Check({ value, onChange, label, required }: { value: boolean; onChange:
 
 export default function Welcome() {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -45,7 +47,7 @@ export default function Welcome() {
   return (
     <Screen>
       <View style={{ paddingTop: 28, paddingBottom: 8, gap: 10, alignItems: 'center' }}>
-        <View style={{ width: 76, height: 76, borderRadius: 24, backgroundColor: alpha(t.primary, 0.15), borderWidth: 1, borderColor: alpha(t.primary, 0.5), alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 76, height: 76, borderRadius: 24, backgroundColor: solid ? t.surface : t.glassStrong, borderWidth: 1, borderColor: alpha(t.primary, 0.5), borderTopColor: t.highlight, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="car-sport" size={38} color={t.primary} />
         </View>
         <T v="display" center>

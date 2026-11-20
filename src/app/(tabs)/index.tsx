@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Badge, Banner, Button, Card, Chip, DemoBadge, Divider, EmptyState, Ionicons, OfflineBadge, Progress, Row, Screen, T, ToggleRow, useToast } from '@/kit/ui';
+import { useReducedTransparency } from '@/kit/access';
 import { alpha, useTheme } from '@/kit/theme';
 import { useOnline } from '@/kit/net';
 import { fmtDateTime, fmtMoney, fmtNumber, fmtTime } from '@/kit/format';
@@ -102,6 +103,7 @@ function ActiveRide({ ride }: { ride: Ride }) {
 
 export default function Book() {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const router = useRouter();
   const { celebrate } = useFeedback();
   const online = useOnline();
@@ -199,7 +201,7 @@ export default function Book() {
                         accessibilityState={{ selected: sel }}
                         accessibilityLabel={`${c.name}, ${fmtMoney(e.price, 'CHF')}`}
                         onPress={() => setCat(c.id)}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: t.radius, borderWidth: 1.5, borderColor: sel ? t.primary : t.border, backgroundColor: sel ? alpha(t.primary, 0.08) : t.surface }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, minHeight: 44, borderRadius: t.radius, borderWidth: 1, borderColor: sel ? t.primary : t.border, borderTopColor: sel ? t.primary : t.highlight, backgroundColor: sel ? alpha(t.primary, 0.1) : solid ? t.surface : t.glassStrong }}
                       >
                         <View style={{ width: 52, height: 52, borderRadius: 14, backgroundColor: t.surface2, alignItems: 'center', justifyContent: 'center' }}>
                           <Ionicons name={c.icon} size={28} color={sel ? t.primary : t.textMuted} />

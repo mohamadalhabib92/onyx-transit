@@ -24,24 +24,14 @@ import { useOnline } from './net';
 import type { HydrateResult, StorageProof } from './store';
 import { haptic } from './haptics';
 import { FadeIn, PressableScale, springs } from './motion';
-import { alpha, useTheme } from './theme';
+import { space, typeScale } from '@/theme';
+import { alpha, buttonRelief, panelStyle, useTheme } from './theme';
 
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
 export { Ionicons };
 
 /* ---------- Typo ---------- */
-type TVariant = 'display' | 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'caption' | 'label' | 'mono';
-const sizes: Record<TVariant, { fs: number; fw: TextStyle['fontWeight']; lh?: number }> = {
-  display: { fs: 32, fw: '800', lh: 38 },
-  h1: { fs: 24, fw: '800', lh: 30 },
-  h2: { fs: 19, fw: '700', lh: 25 },
-  h3: { fs: 16, fw: '700', lh: 22 },
-  body: { fs: 15, fw: '400', lh: 21 },
-  small: { fs: 13, fw: '400', lh: 18 },
-  caption: { fs: 11.5, fw: '600', lh: 15 },
-  label: { fs: 12, fw: '700', lh: 16 },
-  mono: { fs: 13, fw: '500', lh: 18 },
-};
+type TVariant = keyof typeof typeScale;
 
 export function T({
   v = 'body',
@@ -66,7 +56,7 @@ export function T({
   tabular?: boolean;
 }) {
   const t = useTheme();
-  const s = sizes[v];
+  const s = typeScale[v];
   return (
     <Text
       numberOfLines={numberOfLines}
@@ -108,12 +98,19 @@ export function Screen({
   footer?: React.ReactNode;
 }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const insets = useSafeAreaInsets();
   const inner = (
-    <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', padding: padded ? 16 : 0, gap: 14, paddingBottom: 40 }}>{children}</View>
+    <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', padding: padded ? space.screen : 0, gap: space.stack, paddingBottom: space.xxl + space.sm }}>{children}</View>
   );
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top, overflow: 'hidden' }}>
+      {solid ? null : (
+        <>
+          <View pointerEvents="none" style={{ position: 'absolute', top: -90, right: -70, width: 280, height: 280, borderRadius: 140, backgroundColor: t.glow }} />
+          <View pointerEvents="none" style={{ position: 'absolute', top: 240, left: -100, width: 220, height: 220, borderRadius: 110, backgroundColor: t.glow2 }} />
+        </>
+      )}
       {header}
       {scroll ? (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
@@ -129,7 +126,7 @@ export function Screen({
 
 export function Header({ title, subtitle, right, left }: { title: string; subtitle?: string; right?: React.ReactNode; left?: React.ReactNode }) {
   return (
-    <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+    <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center', paddingHorizontal: space.screen, paddingTop: space.md, paddingBottom: space.xs, flexDirection: 'row', alignItems: 'center', gap: space.sm + 2 }}>
       {left}
       <View style={{ flex: 1 }}>
         <T v="h1" numberOfLines={2}>
@@ -152,15 +149,14 @@ export function Row({ children, gap = 10, style, wrap }: { children: React.React
 
 export function Card({ children, style, onPress, accent, a11y }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; accent?: string; a11y?: string }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const base: ViewStyle = {
-    backgroundColor: t.surface,
+    ...panelStyle(t, solid),
     borderRadius: t.radius,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: t.border,
-    padding: 14,
-    gap: 8,
-    borderLeftWidth: accent ? 3 : StyleSheet.hairlineWidth,
-    borderLeftColor: accent ?? t.border,
+    padding: space.md + 2,
+    gap: space.sm,
+    borderLeftWidth: accent ? 3 : 1,
+    borderLeftColor: accent ?? t.highlight,
   };
   if (onPress)
     return (
@@ -216,7 +212,17 @@ export function Button({
   a11y?: string;
 }) {
   const t = useTheme();
-  const bg = { primary: t.primary, secondary: t.surface2, ghost: 'transparent', danger: t.danger, success: t.success }[kind];
+  const calm = usePrefersReducedMotion();
+  const solid = useReducedTransparency();
+  const [down, setDown] = useState(false);
+  const ghost = kind === 'ghost';
+  const bg = {
+    primary: t.primary,
+    secondary: solid ? t.surface2 : t.glassStrong,
+    ghost: 'transparent',
+    danger: t.danger,
+    success: t.success,
+  }[kind];
   const fg = { primary: t.primaryText, secondary: t.text, ghost: t.primary, danger: t.primaryText, success: t.primaryText }[kind];
   return (
     <PressableScale
@@ -225,50 +231,66 @@ export function Button({
       accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       disabled={disabled || loading}
       onPress={onPress}
+      onPressIn={() => setDown(true)}
+      onPressOut={() => setDown(false)}
       hapticKind={kind === 'danger' ? 'warning' : 'tap'}
-      style={({ pressed }) => [
-        {
-          minHeight: small ? 44 : 48,
-          paddingHorizontal: small ? 12 : 18,
-          borderRadius: t.radius - 2,
-          backgroundColor: bg,
-          borderWidth: kind === 'secondary' || kind === 'ghost' ? StyleSheet.hairlineWidth : 0,
-          borderColor: kind === 'ghost' ? 'transparent' : t.border,
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'row',
-          gap: 8,
-          opacity: disabled ? 0.45 : pressed ? 0.9 : 1,
-          alignSelf: full ? 'stretch' : 'auto',
-        },
-        style,
-      ]}
+      style={{ alignSelf: full ? 'stretch' : 'auto', opacity: disabled ? 0.45 : 1 }}
     >
-      {loading ? <ActivityIndicator color={fg} /> : icon ? <Ionicons name={icon} size={small ? 16 : 18} color={fg} /> : null}
-      <Text style={{ color: fg, fontWeight: '700', fontSize: (small ? 13 : 15) * t.fontScale, letterSpacing: 0.2 }}>{title}</Text>
+      <View
+        style={[
+          {
+            minHeight: small ? 44 : 48,
+            paddingHorizontal: small ? space.md : space.lg + 2,
+            borderRadius: t.radius - 2,
+            backgroundColor: bg,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+            gap: space.sm,
+          },
+          buttonRelief(t, down && !disabled, calm, ghost),
+          style,
+        ]}
+      >
+        {loading ? <ActivityIndicator color={fg} /> : icon ? <Ionicons name={icon} size={small ? 16 : 18} color={fg} /> : null}
+        <Text maxFontSizeMultiplier={1.6} style={{ color: fg, fontWeight: '700', fontSize: (small ? 13 : 15) * t.fontScale, letterSpacing: 0.2 }}>{title}</Text>
+      </View>
     </PressableScale>
   );
 }
 
 export function IconButton({ icon, onPress, a11y, color, size = 22 }: { icon: IconName; onPress?: () => void; a11y: string; color?: string; size?: number }) {
   const t = useTheme();
+  const calm = usePrefersReducedMotion();
+  const solid = useReducedTransparency();
+  const [down, setDown] = useState(false);
   return (
     <PressableScale
       accessibilityRole="button"
       accessibilityLabel={a11y}
       onPress={onPress}
+      onPressIn={() => setDown(true)}
+      onPressOut={() => setDown(false)}
       hitSlop={6}
-      scaleTo={0.9}
+      scaleTo={0.94}
       hapticKind="select"
-      style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.surface2 : 'transparent' })}
+      style={{ width: 44, height: 44 }}
     >
-      <Ionicons name={icon} size={size} color={color ?? t.text} />
+      <View
+        style={[
+          { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: solid ? t.surface2 : t.glassStrong },
+          buttonRelief(t, down, calm),
+        ]}
+      >
+        <Ionicons name={icon} size={size} color={color ?? t.text} />
+      </View>
     </PressableScale>
   );
 }
 
 export function Chip({ label, selected, onPress, color, icon }: { label: string; selected?: boolean; onPress?: () => void; color?: string; icon?: IconName }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const c = color ?? t.primary;
   return (
     <PressableScale
@@ -281,14 +303,16 @@ export function Chip({ label, selected, onPress, color, icon }: { label: string;
       style={{
         minHeight: 44,
         maxWidth: '100%',
-        paddingHorizontal: 12,
-        borderRadius: 18,
+        paddingHorizontal: space.md,
+        borderRadius: 22,
         borderWidth: 1,
         borderColor: selected ? c : t.border,
-        backgroundColor: selected ? alpha(c, 0.16) : t.surface,
+        borderTopColor: t.highlight,
+        backgroundColor: selected ? alpha(c, 0.16) : solid ? t.surface : t.glassStrong,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+        boxShadow: `inset 0 1px 0 ${t.highlight}, 0 1px 2px ${t.shadowSoft}`,
       }}
     >
       {icon ? <Ionicons name={icon} size={14} color={selected ? c : t.textMuted} /> : null}
@@ -310,8 +334,9 @@ export function Badge({ label, color, icon }: { label: string; color?: string; i
 
 export function Segmented<K extends string>({ options, value, onChange }: { options: { key: K; label: string }[]; value: K; onChange: (k: K) => void }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   return (
-    <View style={{ flexDirection: 'row', backgroundColor: t.surface2, borderRadius: t.radius, padding: 3 }}>
+    <View style={{ flexDirection: 'row', backgroundColor: solid ? t.track : t.glass, borderRadius: t.radius, padding: 3, borderWidth: 1, borderColor: t.border }}>
       {options.map((o) => {
         const on = o.key === value;
         return (
@@ -328,11 +353,13 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
               flex: 1,
               minHeight: 44,
               paddingHorizontal: 6,
-              borderRadius: t.radius - 3,
+              borderRadius: t.radius - 4,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: on ? t.border : 'transparent',
-              ...(on ? { shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 } : null),
+              backgroundColor: on ? t.raised : 'transparent',
+              borderTopWidth: on ? 1 : 0,
+              borderTopColor: t.highlight,
+              boxShadow: on ? `inset 0 1px 0 ${t.highlight}, 0 2px 6px ${t.shadowSoft}` : 'none',
             }}
           >
             <Text maxFontSizeMultiplier={1.6} numberOfLines={2} style={{ color: on ? t.text : t.textMuted, fontWeight: on ? '700' : '500', fontSize: 13 * t.fontScale, textAlign: 'center' }}>{o.label}</Text>
@@ -346,6 +373,7 @@ export function Segmented<K extends string>({ options, value, onChange }: { opti
 /* ---------- Formulaires ---------- */
 export function Field({ label, hint, error, ...props }: TextInputProps & { label: string; hint?: string; error?: string }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 5 }}>
@@ -366,15 +394,15 @@ export function Field({ label, hint, error, ...props }: TextInputProps & { label
         }}
         style={[
           {
-            minHeight: props.multiline ? 84 : 46,
+            minHeight: props.multiline ? 84 : 48,
             borderWidth: 1,
-            // Anneau de focus or champagne : on sait toujours où l'on écrit.
             borderColor: error ? t.danger : focused ? t.primary : t.border,
+            borderTopColor: error ? t.danger : focused ? t.primary : t.highlight,
             borderRadius: t.radius - 2,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
+            paddingHorizontal: space.md,
+            paddingVertical: space.sm + 2,
             color: t.text,
-            backgroundColor: t.surface,
+            backgroundColor: solid ? t.surface : t.glassStrong,
             fontSize: 15 * t.fontScale,
             textAlignVertical: props.multiline ? 'top' : 'center',
           },
@@ -553,8 +581,9 @@ export function Progress({ value, color, height = 8 }: { value: number; color?: 
 
 export function Stat({ label, value, sub, color, demo }: { label: string; value: string; sub?: string; color?: string; demo?: boolean }) {
   const t = useTheme();
+  const solid = useReducedTransparency();
   return (
-    <View style={{ flexGrow: 1, flexBasis: 140, backgroundColor: t.surface, borderRadius: t.radius, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border, padding: 12, gap: 2 }}>
+    <View style={{ ...panelStyle(t, solid), flexGrow: 1, flexBasis: 140, borderRadius: t.radius, padding: space.md, gap: 2 }}>
       <Row style={{ justifyContent: 'space-between' }}>
         <T v="caption" muted>
           {label}
@@ -579,8 +608,8 @@ export function Sheet({ visible, onClose, title, children }: { visible: boolean;
   const solid = useReducedTransparency();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: solid ? 'rgba(0,0,0,0.88)' : t.overlay }} />
-      <View style={{ backgroundColor: t.bg, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingBottom: insets.bottom + 12 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Fermer" onPress={onClose} style={{ flex: 1, backgroundColor: solid ? (t.dark ? 'rgba(0,0,0,0.88)' : 'rgba(28,24,20,0.72)') : t.overlay }} />
+      <View style={{ backgroundColor: solid ? t.surface : t.glassStrong, borderTopWidth: 1, borderTopColor: t.highlight, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '88%', paddingBottom: insets.bottom + space.md }}>
         <View style={{ width: '100%', maxWidth: 820, alignSelf: 'center' }}>
           <Row style={{ padding: 16, paddingBottom: 6, justifyContent: 'space-between' }}>
             <T v="h2">{title}</T>

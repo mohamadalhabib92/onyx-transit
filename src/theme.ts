@@ -13,7 +13,7 @@ export const onyx: Palette = {
   accent: '#E8D5A3',
   success: '#3FB27F',
   warning: '#E0A43A',
-  danger: '#E5484D',
+  danger: '#EC5A5F', // AA ≥ 4,5:1 sur surface et surface2
   info: '#5B9BF0',
   overlay: 'rgba(11,11,13,0.72)',
   mapWater: '#14263A',

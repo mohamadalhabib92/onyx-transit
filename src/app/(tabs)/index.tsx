@@ -11,6 +11,7 @@ import { CATEGORIES, estimate, type CategoryId } from '@/lib/pricing';
 import { CITIES } from '@/data/places';
 import { cityOpen, ENV } from '@/config';
 import { activeRide, maximumOf, newRide, PAYMENT_LABEL, placeRide, STATUS_LABEL, store, updateRide, type Ride, type Stop } from '@/state';
+import { useFeedback } from '@/kit/motion';
 
 const STEPS: Ride['status'][] = ['requested', 'accepted', 'arriving', 'in_progress', 'completed'];
 
@@ -102,7 +103,7 @@ function ActiveRide({ ride }: { ride: Ride }) {
 export default function Book() {
   const t = useTheme();
   const router = useRouter();
-  const toast = useToast();
+  const { celebrate } = useFeedback();
   const online = useOnline();
   const s = store.use();
   const ride = activeRide(s);
@@ -122,7 +123,7 @@ export default function Book() {
     if (!pickup || !dropoff || !chosen) return;
     const r = newRide({ pickup, dropoff, category: cat, km: chosen.e.km, minutes: chosen.e.min, price: chosen.e.price, currency: 'CHF', simulated: s.autoSim, demo: false, payment: s.payment });
     placeRide(r);
-    toast('Demande envoyée — prix maximum horodaté', 'success');
+    celebrate({ title: 'Demande envoyée', subtitle: 'Prix maximum horodaté — nous cherchons votre chauffeur.', icon: 'car-sport', tone: 'gold' });
   };
 
   return (

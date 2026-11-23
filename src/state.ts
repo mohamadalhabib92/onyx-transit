@@ -16,6 +16,8 @@ export type Ride = {
   createdAt: number;
   pickup: Stop;
   dropoff: Stop;
+  /** Vol ou train, seulement si le départ est GVA ou Cornavin. Absent sur les anciennes courses. */
+  arrivalRef?: string;
   category: CategoryId;
   km: number;
   minutes: number;
@@ -170,6 +172,7 @@ export function preservationIssues(saved: unknown): string[] {
         if ('events' in ride && ride.events != null && !Array.isArray(ride.events)) issues.push(`course ${label} : historique non tableau`);
         if ('priceMaximum' in ride && ride.priceMaximum != null && typeof ride.priceMaximum !== 'number') issues.push(`course ${label} : prix maximum de forme inattendue`);
         if ('quotedAt' in ride && ride.quotedAt != null && typeof ride.quotedAt !== 'number') issues.push(`course ${label} : horodatage de forme inattendue`);
+        if ('arrivalRef' in ride && ride.arrivalRef != null && typeof ride.arrivalRef !== 'string') issues.push(`course ${label} : référence de prise en charge de forme inattendue`);
       });
     }
   }
@@ -394,7 +397,7 @@ export function newRide(input: Omit<Ride, 'id' | 'createdAt' | 'status' | 'progr
     status: 'requested',
     progress: 0,
     paymentStatus: input.payment === 'simulated' ? 'pending' : 'not_configured',
-    events: [{ at: now, label: 'Demande envoyée — prix maximum horodaté' }],
+    events: [{ at: now, label: input.arrivalRef ? `Demande envoyée — prix maximum horodaté — ${input.arrivalRef}` : 'Demande envoyée — prix maximum horodaté' }],
   };
 }
 

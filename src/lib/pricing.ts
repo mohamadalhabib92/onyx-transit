@@ -28,3 +28,8 @@ export function estimate(a: LatLon, b: LatLon, cat: Category) {
   const price = Math.max(cat.min, Math.round(raw * 2) / 2);
   return { km: Math.round(km * 10) / 10, min, price, low: Math.round(price * 0.92), high: Math.round(price * 1.12) };
 }
+
+/** Plafond annoncé au client : le prix déjà calculé, pas la borne haute indicative. */
+export function announcedMaximum(quote: { price: number }): number {
+  return quote.price;
+}

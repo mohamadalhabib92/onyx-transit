@@ -74,12 +74,12 @@ export default function Welcome() {
       </Card>
 
       <Card>
-        <T v="h3">Consentements — nLPD (Suisse)</T>
+        <T v="h3">Consentements</T>
         <T v="small" muted>
-          Le RGPD s’ajoute pour les clients de l’UE. Textes juridiques à valider.
+          Ces cases sont enregistrées sur cet appareil. Cette version ne contient pas de texte juridique.
         </T>
         <Check required value={c.terms} onChange={(v) => setC({ ...c, terms: v })} label="J’accepte les conditions d’utilisation." />
-        <Check required value={c.privacy} onChange={(v) => setC({ ...c, privacy: v })} label="J’ai lu la politique de confidentialité (traitement nécessaire à l’exécution du contrat)." />
+        <Check required value={c.privacy} onChange={(v) => setC({ ...c, privacy: v })} label="J’ai lu la politique de confidentialité." />
         <Check value={c.location} onChange={(v) => setC({ ...c, location: v })} label="Autoriser la localisation GPS pour la prise en charge (facultatif, révocable)." />
         <Check value={c.marketing} onChange={(v) => setC({ ...c, marketing: v })} label="Recevoir des offres Onyx (facultatif, révocable)." />
         <Button title="Lire la politique de confidentialité" kind="ghost" small onPress={() => router.push('/privacy')} />

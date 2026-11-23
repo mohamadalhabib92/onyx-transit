@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPersistedStore, sha256Text, type KeyValueStorage } from '../src/kit/store.ts';
-import { applyProfile, applySignIn, applySignOut, reviveAppState, type AppState } from '../src/state.ts';
+import { applyProfile, applySignIn, applySignOut, preservationIssues, reviveAppState, type AppState } from '../src/state.ts';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -262,4 +262,38 @@ test('profil, connexion et déconnexion conservent les clés inconnues et n’ô
     savedProfile.journal.map((entry) => entry.id),
     ['evt_historique_1'],
   );
+});
+
+test('une référence de prise en charge textuelle reste, une forme inattendue bloque', () => {
+  const kept = reviveAppState({
+    rides: [
+      {
+        id: 'ride_gva',
+        createdAt: 1,
+        pickup: { lat: 46.2381, lon: 6.109, label: 'Aéroport de Genève (GVA)' },
+        dropoff: { lat: 46.2102, lon: 6.1424, label: 'Gare de Cornavin' },
+        category: 'business',
+        km: 1,
+        minutes: 5,
+        price: 40,
+        currency: 'CHF',
+        status: 'requested',
+        simulated: false,
+        demo: false,
+        progress: 0,
+        payment: 'simulated',
+        paymentStatus: 'pending',
+        events: [],
+        arrivalRef: 'LX 1234',
+      },
+    ],
+  } as unknown as AppState);
+  assert.equal(kept.rides[0]?.arrivalRef, 'LX 1234');
+  assert.equal(kept.rides[0]?.priceMaximum, 40);
+  assert.equal(kept.rides[0]?.pickup.label, 'Aéroport de Genève (GVA)');
+
+  const issues = preservationIssues({
+    rides: [{ id: 'ride_gva', arrivalRef: 1234, pickup: { label: 'A' }, dropoff: { label: 'B' } }],
+  });
+  assert.ok(issues.some((issue) => issue.includes('référence de prise en charge')));
 });

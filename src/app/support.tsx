@@ -6,8 +6,8 @@ import { isConfigured } from '@/kit/config';
 import { ENV } from '@/config';
 
 const FAQ = [
-  ['Comment est calculé le prix ?', 'Un prix maximum est affiché avant la confirmation (simulation : distance × 1,3). Il est horodaté et ne peut pas être dépassé sans un nouveau prix accepté. La grille réelle est YOUR_TARIFF_TABLE — à valider.'],
-  ['Puis-je annuler ?', 'Oui. Les frais dépendent de YOUR_FREE_CANCEL_HOURS, non renseigné : ils ne sont pas calculés (à valider).'],
+  ['Comment est calculé le prix ?', 'Le prix maximum annoncé s’affiche avant la confirmation. C’est le plafond de la simulation déjà calculée dans l’application (distance estimée × 1,3, puis la grille de démonstration). Il est horodaté et ne peut pas être dépassé. Aucune autre grille n’est chargée.'],
+  ['Puis-je annuler ?', 'Oui, tant que la course n’a pas démarré. Aucun frais n’est calculé dans cette version.'],
   ['Objet oublié ?', 'Ouvrez le trajet concerné dans « Trajets » puis « Signaler un problème » → « Objet oublié ».'],
   ['Mes données ?', 'Compte → Confidentialité : consentements, export et suppression.'],
 ];

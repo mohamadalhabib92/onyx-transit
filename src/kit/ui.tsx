@@ -43,6 +43,7 @@ export function T({
   numberOfLines,
   selectable,
   tabular,
+  accessibilityLabel,
 }: {
   v?: TVariant;
   color?: string;
@@ -54,6 +55,7 @@ export function T({
   selectable?: boolean;
   /** Chiffres tabulaires (prix, heures). */
   tabular?: boolean;
+  accessibilityLabel?: string;
 }) {
   const t = useTheme();
   const s = typeScale[v];
@@ -61,6 +63,7 @@ export function T({
     <Text
       numberOfLines={numberOfLines}
       selectable={selectable}
+      accessibilityLabel={accessibilityLabel}
       // Dynamic Type : les gros titres plafonnent à ×1,6 pour ne pas casser les mots ; le texte courant suit librement.
       maxFontSizeMultiplier={v === 'display' || v === 'h1' ? 1.6 : v === 'h2' ? 1.8 : undefined}
       style={[

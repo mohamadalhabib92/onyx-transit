@@ -2,15 +2,17 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Badge, Banner, Button, Card, Chip, DemoBadge, Divider, EmptyState, Ionicons, OfflineBadge, Progress, Row, Screen, T, ToggleRow, useToast } from '@/kit/ui';
+import { PickupCard } from '@/components/PickupCard';
 import { useReducedTransparency } from '@/kit/access';
 import { alpha, useTheme } from '@/kit/theme';
 import { useOnline } from '@/kit/net';
 import { fmtDateTime, fmtMoney, fmtNumber, fmtTime } from '@/kit/format';
 import { RouteMap } from '@/components/RouteMap';
 import { PlacePicker } from '@/components/PlacePicker';
-import { CATEGORIES, estimate, type CategoryId } from '@/lib/pricing';
+import { arrivalRefForBooking } from '@/lib/meet';
+import { CATEGORIES, announcedMaximum, estimate, type CategoryId } from '@/lib/pricing';
 import { CITIES } from '@/data/places';
-import { cityOpen, ENV } from '@/config';
+import { cityOpen } from '@/config';
 import { activeRide, maximumOf, newRide, PAYMENT_LABEL, placeRide, STATUS_LABEL, store, updateRide, type Ride, type Stop } from '@/state';
 import { useFeedback } from '@/kit/motion';
 
@@ -33,6 +35,7 @@ function ActiveRide({ ride }: { ride: Ride }) {
         <Banner kind="info" title="En attente d’un chauffeur" text="Mode démo sur un seul appareil : ouvrez l’onglet Chauffeur, passez en ligne et acceptez la demande." />
       ) : null}
       <RouteMap pickup={ride.pickup} dropoff={ride.dropoff} pickupName={ride.pickup.label} dropoffName={ride.dropoff.label} car={car} label={`${ride.pickup.label} → ${ride.dropoff.label}`} />
+      <PickupCard stop={ride.pickup} value={ride.arrivalRef ?? ''} />
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <T v="h2">{STATUS_LABEL[ride.status]}</T>
@@ -91,7 +94,7 @@ function ActiveRide({ ride }: { ride: Ride }) {
             icon="close-circle"
             onPress={() => {
               updateRide(ride.id, { status: 'cancelled' }, 'Annulée par le client');
-              toast(`Course annulée. Frais non calculés (${ENV.freeCancelHours} — à valider).`, 'info');
+              toast('Course annulée. Aucun frais n’est calculé dans cette version.', 'info');
             }}
           />
         ) : null}
@@ -113,6 +116,7 @@ export default function Book() {
   const [pickup, setPickup] = useState<Stop | null>(null);
   const [dropoff, setDropoff] = useState<Stop | null>(null);
   const [cat, setCat] = useState<CategoryId>('business');
+  const [arrivalDraft, setArrivalDraft] = useState('');
   const [picker, setPicker] = useState<'pickup' | 'dropoff' | null>(null);
   const [city, setCity] = useState<'geneve' | 'paris' | 'casablanca'>('geneve');
   const enabledCities = CITIES.filter((c) => cityOpen(c.id, s.cities[c.id]));
@@ -123,7 +127,8 @@ export default function Book() {
 
   const book = () => {
     if (!pickup || !dropoff || !chosen) return;
-    const r = newRide({ pickup, dropoff, category: cat, km: chosen.e.km, minutes: chosen.e.min, price: chosen.e.price, currency: 'CHF', simulated: s.autoSim, demo: false, payment: s.payment });
+    const arrivalRef = arrivalRefForBooking(pickup, arrivalDraft);
+    const r = newRide({ pickup, dropoff, arrivalRef, category: cat, km: chosen.e.km, minutes: chosen.e.min, price: announcedMaximum(chosen.e), currency: 'CHF', simulated: s.autoSim, demo: false, payment: s.payment });
     placeRide(r);
     celebrate({ title: 'Demande envoyée', subtitle: 'Prix maximum horodaté — nous cherchons votre chauffeur.', icon: 'car-sport', tone: 'gold' });
   };
@@ -155,7 +160,7 @@ export default function Book() {
             </Row>
           ) : null}
           {city !== 'geneve' ? (
-            <EmptyState icon="construct" title={`${CITIES.find((c) => c.id === city)?.name} — non ouvert`} text="Cadre légal à étudier. Ce city pack n’est pas une ville ouverte : la réservation reste indisponible." />
+            <EmptyState icon="construct" title={`${CITIES.find((c) => c.id === city)?.name} — non ouvert`} text="Cette ville n’est pas ouverte dans cette version. La réservation reste indisponible." />
           ) : (
             <>
               <Card>
@@ -184,9 +189,11 @@ export default function Book() {
 
               <RouteMap pickup={pickup} dropoff={dropoff} pickupName={pickup?.label} dropoffName={dropoff?.label} />
 
+              {pickup ? <PickupCard stop={pickup} value={arrivalDraft} onChange={setArrivalDraft} /> : null}
+
               {same ? <Banner kind="warning" text="Le départ et la destination sont identiques." /> : null}
 
-              {est && !same ? (
+              {est && chosen && !same ? (
                 <>
                   <Row style={{ justifyContent: 'space-between' }}>
                     <T v="h3">Catégorie</T>
@@ -236,10 +243,21 @@ export default function Book() {
                     </Row>
                   </Card>
                   <ToggleRow label="Course simulée" sub="Simulation : un chauffeur fictif accepte et le trajet est animé. Désactivé : la demande attend l’onglet Chauffeur." value={s.autoSim} onChange={(v) => store.set((x) => ({ ...x, autoSim: v }))} />
-                  <Button title={`Commander ${chosen?.c.name ?? ''} · max. ${chosen ? fmtMoney(chosen.e.price, 'CHF', 0) : ''}`} icon="checkmark-circle" onPress={book} full />
-                  <T v="small" muted center>
-                    Prix maximum de simulation (distance × 1,3). Il est horodaté à la confirmation et ne sera pas augmenté sans votre accord. Tarifs réels : {ENV.tariffTable} — à valider.
-                  </T>
+                  <Card>
+                    <T v="caption" muted>
+                      Prix maximum annoncé
+                    </T>
+                    <T v="display" tabular color={t.primary}>
+                      {fmtMoney(announcedMaximum(chosen.e), 'CHF', 0)}
+                    </T>
+                    <T v="small">
+                      Plafond {chosen.c.name} pour cette simulation. Il est horodaté au moment de la confirmation et ne sera pas augmenté.
+                    </T>
+                    <T v="small" muted>
+                      Même calcul qu’aujourd’hui : distance estimée × 1,3, puis la grille de démonstration déjà dans l’application. Aucune autre grille n’est chargée.
+                    </T>
+                  </Card>
+                  <Button title={`Confirmer · ${chosen.c.name} · ${fmtMoney(announcedMaximum(chosen.e), 'CHF', 0)}`} icon="checkmark-circle" onPress={book} full />
                 </>
               ) : !pickup || !dropoff ? (
                 <EmptyState icon="navigate-circle" title="Choisissez départ et destination" text="Aéroport, gare, hôtels, organisations internationales : sélectionnez un lieu ou utilisez votre position." />

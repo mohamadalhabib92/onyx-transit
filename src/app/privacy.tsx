@@ -7,11 +7,11 @@ import { LOCAL_COORDINATE_RETENTION } from '@/lib/location-copy';
 import { store } from '@/state';
 
 const BASES = [
-  ['Compte et courses', 'Exécution du contrat', 'Durée du compte + 10 ans pour les pièces comptables (reçus)'],
+  ['Compte et courses', 'Enregistré sur cet appareil avec le profil', 'Jusqu’à une suppression demandée dans cet écran'],
   ['Lieux et coordonnées des courses', 'Enregistrement sur cet appareil', LOCAL_COORDINATE_RETENTION],
-  ['Évaluations & réclamations', 'Intérêt légitime (qualité de service)', '3 ans'],
-  ['Offres commerciales', 'Consentement (révocable)', 'Jusqu’au retrait du consentement'],
-  ['Documents chauffeur', 'Obligation légale (transport professionnel de personnes)', 'Durée de l’activité + délai légal'],
+  ['Évaluations et réclamations', 'Enregistrées avec la course', 'Jusqu’à une suppression demandée dans cet écran'],
+  ['Offres commerciales', 'Uniquement si la case est cochée', 'Jusqu’au retrait de la case'],
+  ['Documents chauffeur', 'Saisis dans l’espace administration, non envoyés', 'Tant que ces données restent sur cet appareil'],
 ];
 
 export default function Privacy() {
@@ -27,7 +27,7 @@ export default function Privacy() {
         <IconButton icon="chevron-back" a11y="Retour" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
         <T v="h2">Confidentialité</T>
       </Row>
-      <Banner kind="info" text="nLPD (Suisse) d’abord ; RGPD en plus pour les clients de l’UE. Minimisation, finalités, accès, portabilité et effacement. Responsable : YOUR_COMPANY_LEGAL_NAME. Texte à valider." />
+      <Banner kind="info" text="Ce résumé décrit ce qui est enregistré sur cet appareil. Il n’est pas une politique juridique ni une autorisation de transport." />
       {s.signedIn ? (
         <Section title="Mes consentements">
           <Card>
@@ -39,7 +39,7 @@ export default function Privacy() {
           </Card>
         </Section>
       ) : null}
-      <Section title="Bases légales et conservation">
+      <Section title="Ce qui est enregistré">
         {BASES.map(([what, base, keep]) => (
           <Card key={what}>
             <T v="h3">{what}</T>

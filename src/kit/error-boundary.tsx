@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { onyx } from '@/theme';
+import { useTheme } from './theme';
 import { reportCrash } from './crash';
 import { Button, T } from './ui';
 
@@ -24,15 +24,20 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     const { error } = this.state;
     if (!error) return this.props.children;
-    return (
-      <View style={{ flex: 1, backgroundColor: onyx.bg, padding: 24, gap: 14, justifyContent: 'center', maxWidth: 520, width: '100%', alignSelf: 'center' }}>
-        <T v="h2">Un incident a interrompu cet écran</T>
-        <T muted>Vos données locales sont conservées. Vous pouvez réessayer.</T>
-        <T v="small" muted>
-          {error.message || 'Erreur inattendue'}
-        </T>
-        <Button title="Réessayer" icon="refresh" onPress={this.reset} />
-      </View>
-    );
+    return <CrashFallback message={error.message || 'Erreur inattendue'} onRetry={this.reset} />;
   }
+}
+
+function CrashFallback({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const t = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: t.bg, padding: 24, gap: 14, justifyContent: 'center', maxWidth: 520, width: '100%', alignSelf: 'center' }}>
+      <T v="h2">Un incident a interrompu cet écran</T>
+      <T muted>Vos données locales sont conservées. Vous pouvez réessayer.</T>
+      <T v="small" muted>
+        {message}
+      </T>
+      <Button title="Réessayer" icon="refresh" onPress={onRetry} />
+    </View>
+  );
 }

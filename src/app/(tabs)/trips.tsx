@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Badge, Card, EmptyState, Button, ListItem, Screen, T } from '@/kit/ui';
 import { useTheme } from '@/kit/theme';
 import { fmtDateTime, fmtMoney } from '@/kit/format';
-import { STATUS_LABEL, store } from '@/state';
+import { maximumOf, STATUS_LABEL, store } from '@/state';
 
 export default function Trips() {
   const t = useTheme();
@@ -23,7 +23,7 @@ export default function Trips() {
               icon={r.status === 'completed' ? 'checkmark-circle' : r.status === 'cancelled' ? 'close-circle' : 'car-sport'}
               iconColor={color(r.status)}
               title={`${r.pickup.label} → ${r.dropoff.label}`}
-              sub={`${fmtDateTime(r.createdAt)} · ${fmtMoney(r.price, r.currency, 0)} · ${STATUS_LABEL[r.status]}${r.demo ? ' · test' : ''}${r.simulated ? ' · simulée' : ''}`}
+              sub={`${fmtDateTime(r.createdAt)} · max. ${fmtMoney(maximumOf(r), r.currency, 0)} · ${STATUS_LABEL[r.status]}${r.arrivalRef ? ` · ${r.arrivalRef}` : ''}${r.demo ? ' · test' : ''}${r.simulated ? ' · simulée' : ''}`}
               right={r.dispute?.status === 'open' ? <Badge label="Litige" color={t.warning} /> : undefined}
               onPress={() => router.push(`/ride/${r.id}`)}
             />

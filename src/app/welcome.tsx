@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Banner, Button, Card, Field, Ionicons, Row, Screen, T } from '@/kit/ui';
+import { useReducedTransparency } from '@/kit/access';
 import { alpha, useTheme } from '@/kit/theme';
-import { store } from '@/state';
+import { applySignIn, store } from '@/state';
 import { backendReady } from '@/config';
 
 function Check({ value, onChange, label, required }: { value: boolean; onChange: (v: boolean) => void; label: string; required?: boolean }) {
@@ -29,6 +30,7 @@ function Check({ value, onChange, label, required }: { value: boolean; onChange:
 
 export default function Welcome() {
   const t = useTheme();
+  const solid = useReducedTransparency();
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -38,14 +40,14 @@ export default function Welcome() {
   const canGo = name.trim().length >= 2 && emailOk && c.terms && c.privacy;
 
   const submit = () => {
-    store.set((s) => ({ ...s, signedIn: true, profile: { ...s.profile, name: name.trim(), email: email.trim(), phone: phone.trim() }, consents: { ...c, at: Date.now() } }));
+    store.set((s) => applySignIn(s, { name, email, phone, ...c }));
     router.replace('/(tabs)');
   };
 
   return (
     <Screen>
       <View style={{ paddingTop: 28, paddingBottom: 8, gap: 10, alignItems: 'center' }}>
-        <View style={{ width: 76, height: 76, borderRadius: 24, backgroundColor: alpha(t.primary, 0.15), borderWidth: 1, borderColor: alpha(t.primary, 0.5), alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 76, height: 76, borderRadius: 24, backgroundColor: solid ? t.surface : t.glassStrong, borderWidth: 1, borderColor: alpha(t.primary, 0.5), borderTopColor: t.highlight, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="car-sport" size={38} color={t.primary} />
         </View>
         <T v="display" center>
@@ -72,12 +74,12 @@ export default function Welcome() {
       </Card>
 
       <Card>
-        <T v="h3">Consentements — nLPD (Suisse)</T>
+        <T v="h3">Consentements</T>
         <T v="small" muted>
-          Le RGPD s’ajoute pour les clients de l’UE. Textes juridiques à valider.
+          Ces cases sont enregistrées sur cet appareil. Cette version ne contient pas de texte juridique.
         </T>
         <Check required value={c.terms} onChange={(v) => setC({ ...c, terms: v })} label="J’accepte les conditions d’utilisation." />
-        <Check required value={c.privacy} onChange={(v) => setC({ ...c, privacy: v })} label="J’ai lu la politique de confidentialité (traitement nécessaire à l’exécution du contrat)." />
+        <Check required value={c.privacy} onChange={(v) => setC({ ...c, privacy: v })} label="J’ai lu la politique de confidentialité." />
         <Check value={c.location} onChange={(v) => setC({ ...c, location: v })} label="Autoriser la localisation GPS pour la prise en charge (facultatif, révocable)." />
         <Check value={c.marketing} onChange={(v) => setC({ ...c, marketing: v })} label="Recevoir des offres Onyx (facultatif, révocable)." />
         <Button title="Lire la politique de confidentialité" kind="ghost" small onPress={() => router.push('/privacy')} />

@@ -50,7 +50,7 @@ Onyx Transit is a premium private-driver service in Geneva: choose a Geneva land
 Données stockées localement (pour information) :
 - Votre profil local (nom, téléphone et société si vous les saisissez) et vos consentements ;
 - Vos trajets : lieux de départ et d'arrivée, statut, prix estimé, reçus, notes et réclamations ;
-- Votre position, uniquement si vous choisissez « Ma position » comme lieu de prise en charge.
+- Les coordonnées de départ et d’arrivée restent dans l’historique local de la course, sur cet appareil, jusqu’à la suppression de ces données. Cette version ne les envoie à aucun serveur de l’application.
 
 Autorisations :
 - Localisation « pendant l'utilisation » : facultative, pour pré-remplir le lieu de prise en charge. Jamais en arrière-plan.

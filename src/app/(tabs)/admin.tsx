@@ -63,8 +63,8 @@ export default function Admin() {
               exportText(
                 'onyx-courses.csv',
                 toCSV([
-                  ['id', 'date', 'depart', 'destination', 'categorie', 'km', 'minutes', 'prix_chf', 'prix_maximum', 'prix_facture', 'devis_horodate', 'statut', 'simulee', 'test', 'note'],
-                  ...s.rides.map((r) => [r.id, fmtDateTime(r.createdAt), r.pickup.label, r.dropoff.label, r.category, r.km, r.minutes, r.price, r.priceMaximum ?? r.price, r.priceCharged ?? '', r.quotedAt ? fmtDateTime(r.quotedAt) : '', STATUS_LABEL[r.status], r.simulated ? 'oui' : 'non', r.demo ? 'oui' : 'non', r.rating ?? '']),
+                  ['id', 'date', 'depart', 'destination', 'categorie', 'km', 'minutes', 'prix_chf', 'prix_maximum', 'prix_facture', 'devis_horodate', 'statut', 'simulee', 'test', 'note', 'ref_prise_en_charge', 'carte_vtc'],
+                  ...s.rides.map((r) => [r.id, fmtDateTime(r.createdAt), r.pickup.label, r.dropoff.label, r.category, r.km, r.minutes, r.price, r.priceMaximum ?? r.price, r.priceCharged ?? '', r.quotedAt ? fmtDateTime(r.quotedAt) : '', STATUS_LABEL[r.status], r.simulated ? 'oui' : 'non', r.demo ? 'oui' : 'non', r.rating ?? '', r.arrivalRef ?? '', r.driverVtcCard ?? '']),
                 ]),
                 'text/csv'
               )
@@ -96,7 +96,7 @@ export default function Admin() {
                   icon="car-sport"
                   iconColor={r.status === 'completed' ? t.success : r.status === 'cancelled' ? t.danger : t.primary}
                   title={`${r.pickup.label} → ${r.dropoff.label}`}
-                  sub={`${fmtDateTime(r.createdAt)} · ${STATUS_LABEL[r.status]} · ${fmtMoney(r.price, 'CHF', 0)}${r.simulated ? ' · simulée' : ''}${r.demo ? ' · test' : ''}`}
+                  sub={`${fmtDateTime(r.createdAt)} · ${STATUS_LABEL[r.status]} · ${fmtMoney(r.price, 'CHF', 0)}${r.arrivalRef ? ` · ${r.arrivalRef}` : ''}${r.driverVtcCard ? ` · carte ${r.driverVtcCard}` : ''}${r.simulated ? ' · simulée' : ''}${r.demo ? ' · test' : ''}`}
                   onPress={() => router.push(`/ride/${r.id}`)}
                 />
               ))}
@@ -120,7 +120,7 @@ export default function Admin() {
         <Card>
           <T v="h3">{s.profile.name || 'Chauffeur local'}</T>
           <T v="small" muted>
-            {s.driver.online ? 'En ligne' : 'Hors ligne'} · documents de l’espace chauffeur de cet appareil
+            {s.driver.online ? 'En ligne' : 'Hors ligne'} · documents de l’espace chauffeur de cet appareil. Carte professionnelle : {s.driver.vtcCardNumber.trim() || 'non renseignée'}. Visible ici, pas sur le reçu client.
           </T>
           <T v="small" muted>
             {docReport(s).blockers.length ? `Blocage mise en ligne : ${docReport(s).blockers.map((b) => b.label).join(', ')}` : 'Aucun document obligatoire en blocage.'}

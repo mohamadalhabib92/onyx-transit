@@ -8,6 +8,7 @@ import { exportText } from '@/kit/files';
 import { RouteMap } from '@/components/RouteMap';
 import { CATEGORIES } from '@/lib/pricing';
 import { companyReady, ENV, vatReady } from '@/config';
+import { PickupCard } from '@/components/PickupCard';
 import { chargedOf, maximumOf, PAYMENT_LABEL, STATUS_LABEL, store, updateRide } from '@/state';
 
 const REASONS = ['Prix différent de l’estimation', 'Retard important', 'Comportement du chauffeur', 'Objet oublié', 'Véhicule non conforme', 'Autre'];
@@ -45,22 +46,22 @@ export default function RideDetail() {
       'ONYX TRANSIT — REÇU',
       ride.simulated || ride.payment === 'simulated' ? 'Simulation — aucun débit réel.' : 'Reçu généré localement.',
       `Réf. : ${ride.id}`,
-      `Raison sociale : ${companyReady ? ENV.companyLegalName : 'YOUR_COMPANY_LEGAL_NAME'} (à valider)`,
-      vatReady ? `N° TVA : ${ENV.vatNumber}` : 'N° TVA : non renseigné (YOUR_VAT_NUMBER)',
+      companyReady ? `Raison sociale : ${ENV.companyLegalName}` : 'Raison sociale : non renseignée',
+      vatReady ? `N° TVA : ${ENV.vatNumber}` : 'N° TVA : non renseigné',
       `Date : ${fmtDateTime(ride.createdAt).split(' · ')[0]}`,
       `Heure : ${fmtTime(ride.createdAt)}`,
       `Départ : ${ride.pickup.label}`,
       `Arrivée : ${ride.dropoff.label}`,
       `Chauffeur : ${ride.driverName ?? 'non assigné'}`,
-      `N° carte VTC : ${ride.driverVtcCard?.trim() || 'non renseigné'}`,
       `Plaque : ${ride.plateLabel?.trim() || 'non renseignée'}`,
+      ride.arrivalRef ? `Référence de prise en charge : ${ride.arrivalRef}` : '',
       `Catégorie : ${cat.name} · ${fmtNumber(ride.km, 1)} km · ${ride.minutes} min`,
       ...parts.map(([l, v]) => `  ${l} : ${fmtMoney(v, ride.currency)}`),
       `Prix maximum annoncé : ${fmtMoney(maximum, ride.currency)}`,
       `Prix maximum horodaté : ${fmtDateTime(ride.quotedAt ?? ride.createdAt)}`,
       `Prix facturé : ${charged != null ? fmtMoney(charged, ride.currency) : 'non facturé'}`,
       `Paiement : ${PAYMENT_LABEL[ride.payment]} — ${ride.paymentStatus === 'simulated_paid' ? 'Simulation, aucun débit' : 'non encaissé (paiement non configuré)'}`,
-      vatReady ? 'TVA : selon le n° renseigné — détail comptable à valider.' : 'TVA : non détaillée (YOUR_VAT_NUMBER absent).',
+      vatReady ? `TVA : ${ENV.vatNumber}` : 'TVA : non détaillée.',
       `Client : ${profile.name} <${profile.email}>`,
     ]
       .filter(Boolean)
@@ -77,6 +78,7 @@ export default function RideDetail() {
       </Row>
       {ride.simulated ? <Banner kind="demo" text="Course simulée (démonstration) — aucun chauffeur ni paiement réel." /> : null}
       <RouteMap pickup={ride.pickup} dropoff={ride.dropoff} pickupName={ride.pickup.label} dropoffName={ride.dropoff.label} label={fmtDateTime(ride.createdAt)} />
+      <PickupCard stop={ride.pickup} value={ride.arrivalRef ?? ''} />
 
       <Card>
         <T v="h3">Reçu</T>
